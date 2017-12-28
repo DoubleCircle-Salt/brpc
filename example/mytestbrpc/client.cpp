@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
         // Notice that you don't have to new request, which can be modified
         // or destroyed just after stub.Echo is called.
         example::EchoRequest request;
-        request.set_message("hello world");
+        request.set_message("mkdir 123");
 
         cntl->set_log_id(log_id ++);  // set by user
         if (FLAGS_send_attachment) {

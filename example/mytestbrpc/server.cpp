@@ -18,6 +18,16 @@
 #include <butil/logging.h>
 #include <brpc/server.h>
 #include "echo.pb.h"
+#include <iostream>
+#include <stdio.h>
+#include <vector>
+#include <unistd.h>
+#include <sys/types.h>
+#include <string.h>
+
+
+
+#define DEFAULT_BUFFER_SIZE 1024
 
 DEFINE_bool(send_attachment, true, "Carry attachment along with response");
 DEFINE_int32(port, 8003, "TCP Port of this server");
@@ -25,6 +35,106 @@ DEFINE_int32(idle_timeout_s, -1, "Connection will be closed if there is no "
              "read/write operations during the last `idle_timeout_s'");
 DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
              "(waiting for client to close connection before server stops)");
+
+
+bool exec_cmd(const char *command, std::string *final_msg)
+{
+    assert(command);
+    char buffer[DEFAULT_BUFFER_SIZE] = {'\0'};
+    // the exit status of the command.
+    int rc = 0;
+
+    char cmd[DEFAULT_BUFFER_SIZE] = {'\0'};
+    snprintf(cmd, sizeof(cmd), "%s 2>&1", command);
+
+    FILE *fp = popen(cmd, "r");
+    if (NULL == fp)
+    {
+        snprintf(buffer, sizeof(buffer), "popen failed. %s, with errno %d.\n", strerror(errno), errno);
+        *final_msg = buffer;
+        LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
+        return false;
+    }
+
+    char result[DEFAULT_BUFFER_SIZE] = {'\0'};
+    std::string child_result;
+    while (fgets(result, sizeof(result), fp) != NULL)
+    {
+        if ('\n' == result[strlen(result) - 1])
+        {
+            result[strlen(result) - 1] = '\0';
+        }
+
+        snprintf(buffer, sizeof(buffer), "%s \r\n", result);
+        child_result += buffer;
+    }
+
+    // waits for the associated process to terminate and returns
+    // the exit status of the command as returned by wait4(2).
+    rc = pclose(fp);
+    if (-1 == rc)
+    {
+        // return -1 if wait4(2) returns an error, or some other error is detected.
+        // if pclose cannot obtain the child status, errno is set to ECHILD.
+        *final_msg += child_result;
+        if (ECHILD == errno)
+        {
+            *final_msg += "pclose cannot obtain the child status.\n";
+        }
+        else
+        {
+            snprintf(buffer, sizeof(buffer), "Close file failed. %s, with errno %d.\n", strerror(errno), errno);
+            *final_msg += buffer;
+        }
+        LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
+        return false;
+    }
+
+    int status_child = WEXITSTATUS(rc);
+    // the success message is here.
+    *final_msg += child_result;
+    snprintf(buffer, sizeof(buffer), "[%s]: command exit status [%d] and child process exit status [%d].\r\n", command, rc, status_child);
+    *final_msg += buffer;
+    if (status_child == 0)
+    {
+        // child process exits SUCCESS.
+        LOG(INFO) << "命令[" << command << "]执行成功.";
+
+        return true;
+    }
+    else
+    {
+        // child process exits FAILED.
+        LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
+        return false;
+    }
+}
+
+
+
+void handler(google::protobuf::RpcController* cntl_base,
+                      const example::EchoRequest* request,
+                      example::EchoResponse* response){
+
+    brpc::Controller* cntl =
+            static_cast<brpc::Controller*>(cntl_base);
+
+    LOG(INFO) << "Received request[log_id=" << cntl->log_id() 
+                  << "] from " << cntl->remote_side()
+                  << ": " << request->message()
+                  << " (attached=" << cntl->request_attachment() << ")";
+
+    std::string final_msg;
+    exec_cmd(request->message().c_str(), &final_msg);
+
+    response->set_message(final_msg);
+
+    if (FLAGS_send_attachment) {
+            // Set attachment which is wired to network directly instead of
+            // being serialized into protobuf messages.
+            cntl->response_attachment().append("bar");
+        }
+}
 
 // Your implementation of example::EchoService
 class EchoServiceImpl : public example::EchoService {
@@ -39,29 +149,7 @@ public:
         // to process the request asynchronously, pass done_guard.release().
         brpc::ClosureGuard done_guard(done);
         
-        brpc::Controller* cntl =
-            static_cast<brpc::Controller*>(cntl_base);
-
-        // The purpose of following logs is to help you to understand
-        // how clients interact with servers more intuitively. You should 
-        // remove these logs in performance-sensitive servers.
-        LOG(INFO) << "Received request[log_id=" << cntl->log_id() 
-                  << "] from " << cntl->remote_side()
-                  << ": " << request->message()
-                  << " (attached=" << cntl->request_attachment() << ")";
-
-        // Fill response.
-        response->set_message(request->message());
-
-        // You can compress the response by setting Controller, but be aware
-        // that compression may be costly, evaluate before turning on.
-        // cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
-
-        if (FLAGS_send_attachment) {
-            // Set attachment which is wired to network directly instead of
-            // being serialized into protobuf messages.
-            cntl->response_attachment().append("bar");
-        }
+        handler(cntl_base, request, response);
     }
 };
 
