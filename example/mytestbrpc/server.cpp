@@ -40,6 +40,23 @@ DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
              "(waiting for client to close connection before server stops)");
 
 
+void init_daemon(void)
+{
+    if (fork() != 0) exit(0);
+    setsid();
+    chdir ("/");
+    int fd = open ("/dev/null", O_RDWR, 0);
+    if (fd != -1)
+    {
+        dup2 (fd, STDIN_FILENO);
+        dup2 (fd, STDOUT_FILENO);
+        dup2 (fd, STDERR_FILENO);
+        if (fd > 2) close (fd);
+    }
+    umask (0022);
+    return;
+}
+
 bool exec_cmd(const char *command, std::string *final_msg)
 {
     assert(command);
@@ -138,9 +155,6 @@ void handler(google::protobuf::RpcController* cntl_base,
             cntl->response_attachment().append("bar");
         }
 }
-
-
-
 
 // Your implementation of example::EchoService
 class EchoServiceImpl : public example::EchoService {
