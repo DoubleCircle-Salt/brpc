@@ -18,6 +18,7 @@
 #include <butil/logging.h>
 #include <butil/time.h>
 #include <brpc/channel.h>
+#include <fstream>
 #include "echo.pb.h"
 
 DEFINE_bool(send_attachment, true, "Carry attachment along with requests");
@@ -46,9 +47,8 @@ void HandleEchoResponse(
 }
                         
 
-int main(int argc, char* argv[]) {
-    // Parse gflags. We recommend you to use gflags as well.
-    GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
+int handler(char* cmd) {
+    
 
     // A Channel represents a communication line to a Server. Notice that 
     // Channel is thread-safe and can be shared by all threads in your program.
@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
         // Notice that you don't have to new request, which can be modified
         // or destroyed just after stub.Echo is called.
         example::EchoRequest request;
-        request.set_message("mkdir 123");
+        request.set_message(cmd);
 
         cntl->set_log_id(log_id ++);  // set by user
         if (FLAGS_send_attachment) {
@@ -103,5 +103,29 @@ int main(int argc, char* argv[]) {
     }
 
     LOG(INFO) << "EchoClient is going to quit";
+    return 0;
+}
+
+int main(int argc, char* argv[]) {
+    // Parse gflags. We recommend you to use gflags as well.
+    GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
+    
+    std::ifstream fin(argv[1]);
+    if (!fin) {
+        LOG(INFO) << "Failed To Open the Cmd File!";
+        return -1;
+    }
+
+    while (!fin.eof()) {
+        char word[8];
+        fin >> word;
+        std::cout << word << std::endl;
+    }
+
+
+
+    char cmd[1024];
+    handler(cmd);
+
     return 0;
 }

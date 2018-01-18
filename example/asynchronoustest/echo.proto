@@ -1,0 +1,27 @@
+syntax="proto2";
+package exec;
+
+option cc_generic_services = true;
+
+message CommandRequest {
+	required string command = 1;
+};
+
+message CommandResponse {
+	required string message = 1;
+};
+
+message FileRequest {
+	required string filename = 1;
+	required int32 filelength = 2;
+	required string filecontent = 3;
+};
+
+message FileResponse {
+	required string message = 1;
+};
+
+service EchoService {
+      rpc ExecCommand(CommandRequest) returns (CommandResponse);
+      rpc PostFile(FileRequest) returns (FileResponse);
+};
