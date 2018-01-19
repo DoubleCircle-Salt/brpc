@@ -18,6 +18,7 @@
 #include <butil/logging.h>
 #include <butil/time.h>
 #include <brpc/channel.h>
+#include <brpc/stream.h>
 #include "echo.pb.h"
 #include <fstream>
 
@@ -29,6 +30,8 @@ DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 100, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)"); 
 DEFINE_int32(default_buffer_size, 1024, "");
+DEFINE_int32(stream_max_buf_size, -1, "");
+
 
 void HandleCommandResponse(
         brpc::Controller* cntl,
@@ -118,30 +121,49 @@ void PostFile() {
 
     exec::FileResponse* response = new exec::FileResponse();
     brpc::Controller* cntl = new brpc::Controller();
-
+    brpc::StreamId stream;
+    brpc::StreamOptions stream_options;
+    stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+    if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+        LOG(ERROR) << "Fail to create stream";
+        return;
+    }
 
     exec::FileRequest request;
-    request.set_filename("test.conf_bak");
+    std::string filename = "test.conf_bak";
+
     std::ifstream fin("test.conf");
     if (!fin) {
         LOG(INFO) << "Failed To Open the File!";
         return;
     }
-    std::string filecontent = "";
-    int32_t filelength = 0;
-    while(!fin.eof()) {
-        char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
-        int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
-        filelength += length;
-        for(int32_t i = 0; i < length; i++)
-            filecontent += buffer[i];
-    }
-    request.set_filecontent(filecontent);
-    request.set_filelength(filelength); 
+
+    fin.seekg(0, std::ios::end);
+    request.set_filelength(fin.tellg()); 
+    fin.seekg(0, std::ios::beg);
+
+    request.set_filename(filename);
 
     google::protobuf::Closure* done = brpc::NewCallback(
         &HandleFileResponse, cntl, response);
     stub.PostFile(cntl, &request, response, done);
+    
+
+
+
+    butil::IOBuf msg;
+    msg.append(filename);
+    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
+
+    while(!fin.eof()) {
+        msg.clear();
+        char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
+        int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
+        msg.append(buffer, length);
+        CHECK_EQ(0, brpc::StreamWrite(stream, msg));  
+    }
+
+    CHECK_EQ(0, brpc::StreamWait(stream, NULL)); 
 }
 
 int main(int argc, char* argv[]) {

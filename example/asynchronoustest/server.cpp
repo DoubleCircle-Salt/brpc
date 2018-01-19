@@ -17,6 +17,7 @@
 #include <gflags/gflags.h>
 #include <butil/logging.h>
 #include <brpc/server.h>
+#include <brpc/stream.h>
 #include "echo.pb.h"
 #include <fstream>
 
@@ -28,6 +29,12 @@ DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
              "(waiting for client to close connection before server stops)");
 
 DEFINE_int32(default_buffer_size, 1024, "");
+
+typedef struct _STRUCT_STREAM{
+        std::string filename;
+        int64_t filelength;
+        std::ofstream fout;
+}STRUCT_STREAM;
 
 
 std::string exec_cmd(const char *command, std::string *final_msg)
@@ -103,11 +110,48 @@ std::string exec_cmd(const char *command, std::string *final_msg)
     }
 }
 
+typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFoutMap;
+StreamFoutMap streamfoutmap;
+
+class StreamReceiver : public brpc::StreamInputHandler {
+public:
+    virtual int on_received_messages(brpc::StreamId id, 
+                                     butil::IOBuf *const messages[], 
+                                     size_t size) {
+        size_t i = 0;
+        if(!fout.is_open()) {
+            fout.open((*messages[i++]).to_string());        
+        }
+        
+        for (; i < size; i++) {
+            fout.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
+        }
+        
+        return 0;
+    }
+    virtual void on_idle_timeout(brpc::StreamId id) {
+        LOG(INFO) << "Stream=" << id << " has no data transmission for a while";
+        brpc::StreamClose();
+        fout.close();
+    }
+    virtual void on_closed(brpc::StreamId id) {
+        LOG(INFO) << "Stream=" << id << " is closed";
+        brpc::StreamClose();
+        fout.close();
+    }
+private:
+    int64_t filelength;
+    int64_t length;
+    std::ofstream fout;
+};
+
 // Your implementation of example::EchoService
 class EchoServiceImpl : public exec::EchoService {
 public:
-    EchoServiceImpl() {};
-    virtual ~EchoServiceImpl() {};
+    EchoServiceImpl() : _sd(brpc::INVALID_STREAM_ID) {};
+    virtual ~EchoServiceImpl() {
+        brpc::StreamClose(_sd);
+    };
     virtual void ExecCommand(google::protobuf::RpcController* cntl_base,
                       const exec::CommandRequest* request,
                       exec::CommandResponse* response,
@@ -134,12 +178,17 @@ public:
         brpc::ClosureGuard done_guard(done);
         brpc::Controller* cntl =
             static_cast<brpc::Controller*>(cntl_base);
-
-        std::ofstream fout(request->filename());
-        fout.write(request->filecontent().c_str(), request->filelength());
-        fout.close();
+        brpc::StreamOptions stream_options;
+        stream_options.handler = &_receiver;
+        if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {
+            cntl->SetFailed("Fail to accept stream");
+            return;
+        }
         response->set_message("123");
     }
+private:
+    StreamReceiver _receiver;
+    brpc::StreamId _sd;
 };
 
 int main(int argc, char* argv[]) {

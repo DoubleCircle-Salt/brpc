@@ -12,9 +12,8 @@ message CommandResponse {
 };
 
 message FileRequest {
-	required string filename = 1;
-	required int32 filelength = 2;
-	required string filecontent = 3;
+	required int32 filelength = 1;
+	required string filename = 2;
 };
 
 message FileResponse {
