@@ -137,9 +137,11 @@ void PostFile() {
         LOG(INFO) << "Failed To Open the File!";
         return;
     }
-
+    int64_t filelength;
+    
     fin.seekg(0, std::ios::end);
-    request.set_filelength(fin.tellg()); 
+    filelength = fin.tellg();
+    request.set_filelength(filelength); 
     fin.seekg(0, std::ios::beg);
 
     request.set_filename(filename);
@@ -148,7 +150,6 @@ void PostFile() {
         &HandleFileResponse, cntl, response);
     stub.PostFile(cntl, &request, response, done);
     
-
 
 
     butil::IOBuf msg;
@@ -163,7 +164,6 @@ void PostFile() {
         CHECK_EQ(0, brpc::StreamWrite(stream, msg));  
     }
 
-    CHECK_EQ(0, brpc::StreamWait(stream, NULL)); 
 }
 
 int main(int argc, char* argv[]) {

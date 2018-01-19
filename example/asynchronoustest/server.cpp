@@ -36,7 +36,6 @@ typedef struct _STRUCT_STREAM{
         std::ofstream fout;
 }STRUCT_STREAM;
 
-
 std::string exec_cmd(const char *command, std::string *final_msg)
 {
     assert(command);
@@ -111,38 +110,34 @@ std::string exec_cmd(const char *command, std::string *final_msg)
 }
 
 typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFoutMap;
-StreamFoutMap streamfoutmap;
-
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
     virtual int on_received_messages(brpc::StreamId id, 
                                      butil::IOBuf *const messages[], 
                                      size_t size) {
         size_t i = 0;
-        if(!fout.is_open()) {
-            fout.open((*messages[i++]).to_string());        
+        if(!streamfoutmap[id].fout.is_open()) {
+            streamfoutmap[id].fout.open((*messages[i++]).to_string());        
         }
         
         for (; i < size; i++) {
-            fout.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
+            streamfoutmap[id].fout.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
         }
         
         return 0;
     }
     virtual void on_idle_timeout(brpc::StreamId id) {
         LOG(INFO) << "Stream=" << id << " has no data transmission for a while";
-        brpc::StreamClose();
-        fout.close();
+        brpc::StreamClose(id);
+        streamfoutmap[id].fout.close();
     }
     virtual void on_closed(brpc::StreamId id) {
         LOG(INFO) << "Stream=" << id << " is closed";
-        brpc::StreamClose();
-        fout.close();
+        brpc::StreamClose(id);
+        streamfoutmap[id].fout.close();
     }
 private:
-    int64_t filelength;
-    int64_t length;
-    std::ofstream fout;
+    StreamFoutMap streamfoutmap;
 };
 
 // Your implementation of example::EchoService
@@ -178,6 +173,7 @@ public:
         brpc::ClosureGuard done_guard(done);
         brpc::Controller* cntl =
             static_cast<brpc::Controller*>(cntl_base);
+
         brpc::StreamOptions stream_options;
         stream_options.handler = &_receiver;
         if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {

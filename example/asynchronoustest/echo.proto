@@ -12,7 +12,7 @@ message CommandResponse {
 };
 
 message FileRequest {
-	required int32 filelength = 1;
+	required int64 filelength = 1;
 	required string filename = 2;
 };
 
