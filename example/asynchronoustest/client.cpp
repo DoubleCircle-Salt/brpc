@@ -21,6 +21,7 @@
 #include <brpc/stream.h>
 #include "echo.pb.h"
 #include <fstream>
+#include <sstream>
 
 DEFINE_bool(send_attachment, true, "Carry attachment along with requests");
 DEFINE_string(protocol, "baidu_std", "Protocol type. Defined in src/brpc/options.proto");
@@ -44,15 +45,9 @@ public:
     virtual int on_received_messages(brpc::StreamId id, 
                                      butil::IOBuf *const messages[], 
                                      size_t size) {
-        size_t i = 0;
-        if(!streamfoutmap[id].fout.is_open()) {
-            streamfoutmap[id].fout.open((*messages[i++]).to_string());        
-        }
-        
-        for (; i < size; i++) {
-            streamfoutmap[id].fout.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
-        }
-        
+        for (size_t i = 0; i < size; i++) {
+            LOG(INFO) << (*messages[i]).to_string();
+        }        
         return 0;
     }
     virtual void on_idle_timeout(brpc::StreamId id) {
@@ -187,7 +182,9 @@ void PostFile() {
 
     brpc::StreamId stream;
     brpc::StreamOptions stream_options;
+    static StreamReceiver _receiver;
 
+    stream_options.handler = &_receiver;
     stream_options.max_buf_size = FLAGS_stream_max_buf_size;
     if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
         LOG(ERROR) << "Fail to create stream";
@@ -207,9 +204,11 @@ void PostFile() {
         &HandleFileResponse, cntl, response);
     stub.PostFile(cntl, &request, response, done);    
 
+    std::stringstream filelengthstream;
+    filelengthstream << filelength;
 
     butil::IOBuf msg;
-    msg.append(filename);
+    msg.append(filename + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 
     while(!fin.eof()) {

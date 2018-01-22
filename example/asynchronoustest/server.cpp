@@ -34,6 +34,7 @@ DEFINE_int32(default_buffer_size, 1024, "");
 typedef struct _STRUCT_STREAM{
         std::string filename;
         int64_t filelength;
+        int64_t length;
         std::ofstream fout;
 }STRUCT_STREAM;
 
@@ -118,11 +119,33 @@ public:
                                      size_t size) {
         size_t i = 0;
         if(!streamfoutmap[id].fout.is_open()) {
-            streamfoutmap[id].fout.open((*messages[i++]).to_string());        
+            std::string::size_type nPosB = (*messages[i]).to_string().find(" ");
+            if (nPosB != std::string::npos){
+                streamfoutmap[id].filename = (*messages[i]).to_string().substr(0, nPosB);
+                streamfoutmap[id].filelength = atoi((*messages[i++]).to_string().substr(nPosB + 1).c_str())
+            }else{
+                streamfoutmap[id].filename = (*messages[i++]).to_string();
+                streamfoutmap[id].filelength = -1;
+            }
+            streamfoutmap[id].length = 0;
+            streamfoutmap[id].fout.open(streamfoutmap[id].filename);
         }
+
         
         for (; i < size; i++) {
             streamfoutmap[id].fout.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
+            streamfoutmap[id].length += (*messages[i]).to_string().length();
+        }
+
+        //文件传输完毕,返回文件MD5值
+        if (streamfoutmap[id].length == streamfoutmap[id].filelength){
+            streamfoutmap[id].fout.close();
+            std::string command = "md5sum " + streamfoutmap[id].filename;
+            std::string final_msg;
+            exec_cmd(command.c_str(), &final_msg);
+            butil::IOBuf msg;
+            msg.append(final_msg);
+            CHECK_EQ(0, brpc::StreamWrite(id, msg));
         }
         
         return 0;
