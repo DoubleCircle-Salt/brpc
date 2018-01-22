@@ -36,32 +36,60 @@ DEFINE_int32(stream_max_buf_size, -1, "");
 typedef struct _STRUCT_STREAM{
         std::string filename;
         int64_t filelength;
-        std::ofstream fout;
+        int64_t length;
+        std::ofstream file;
 }STRUCT_STREAM;
 
-typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFoutMap;
+typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFileMap;
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
     virtual int on_received_messages(brpc::StreamId id, 
                                      butil::IOBuf *const messages[], 
                                      size_t size) {
-        for (size_t i = 0; i < size; i++) {
-            LOG(INFO) << (*messages[i]).to_string();
-        }        
+        size_t i = 0;
+        if(!streamfilemap[id].file.is_open()) {
+            std::string::size_type nPosB = (*messages[i]).to_string().find(" ");
+            if (nPosB != std::string::npos){
+                streamfilemap[id].filename = (*messages[i]).to_string().substr(0, nPosB);
+                streamfilemap[id].filelength = atoi((*messages[i++]).to_string().substr(nPosB + 1).c_str());
+            }else{
+                streamfilemap[id].filename = (*messages[i++]).to_string();
+                streamfilemap[id].filelength = -1;
+            }
+            streamfilemap[id].length = 0;
+            if (streamfilemap[id].filelength >= 0) {
+                streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
+            }
+        }
+        //写文件
+        if (streamfilemap[id].filelength >= 0) {
+            for (; i < size; i++) {
+                streamfilemap[id].file.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
+                streamfilemap[id].length += (*messages[i]).to_string().length();
+            }
+            if (streamfilemap[id].length == streamfilemap[id].filelength) {
+                LOG(INFO) << "文件长度验证正确";
+            }
+        }else {
+            for (; i < size; i++) {
+                LOG(INFO) << (*messages[i]).to_string();
+            }
+        }
+      
         return 0;
     }
     virtual void on_idle_timeout(brpc::StreamId id) {
         LOG(INFO) << "Stream=" << id << " has no data transmission for a while";
         brpc::StreamClose(id);
-        streamfoutmap[id].fout.close();
+        streamfilemap[id].file.close();
     }
     virtual void on_closed(brpc::StreamId id) {
         LOG(INFO) << "Stream=" << id << " is closed";
         brpc::StreamClose(id);
-        streamfoutmap[id].fout.close();
+        streamfilemap[id].file.close();
     }
 private:
-    StreamFoutMap streamfoutmap;
+    StreamFileMap streamfilemap;
 };
 
 void HandleCommandResponse(
@@ -97,25 +125,6 @@ void HandleFileResponse(
         << cntl->response_attachment() << ")"
         << " latency=" << cntl->latency_us() << "us";
 }
-
-void HandleGetFileResponse(
-        brpc::Controller* cntl,
-        exec::FileResponse* response) {
-
-    std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-    std::unique_ptr<exec::FileResponse> response_guard(response);
-
-    if (cntl->Failed()) {
-        LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
-        return;
-    }
-    LOG(INFO) << "Received response from " << cntl->remote_side()
-        << ": " << response->message() << " (attached="
-        << cntl->response_attachment() << ")"
-        << " latency=" << cntl->latency_us() << "us";
-
-}
-
 
 void ExecCommand() {
 
@@ -223,7 +232,6 @@ void PostFile() {
 void GetFile() {
     brpc::Channel channel;
 
-
     brpc::ChannelOptions options;
     options.protocol = FLAGS_protocol;
     options.connection_type = FLAGS_connection_type;
@@ -233,30 +241,36 @@ void GetFile() {
         LOG(ERROR) << "Fail to initialize channel";
         return;
     }
+
     exec::EchoService_Stub stub(&channel);
 
     exec::FileResponse* response = new exec::FileResponse();
     brpc::Controller* cntl = new brpc::Controller();
     
     exec::FileRequest request;
-
-    request.set_filename("test.conf");
+    std::string filename = "test.conf_bak";
 
     brpc::StreamId stream;
     brpc::StreamOptions stream_options;
-    StreamReceiver _receiver;
+    static StreamReceiver _receiver;
 
     stream_options.handler = &_receiver;
-
-
+    stream_options.max_buf_size = FLAGS_stream_max_buf_size;
     if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
         LOG(ERROR) << "Fail to create stream";
         return;
     }
 
+    request.set_filename(filename);
+    request.set_filelength(-1);
+
     google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleGetFileResponse, cntl, response);
-    stub.GetFile(cntl, &request, response, done);
+        &HandleFileResponse, cntl, response);
+    stub.PostFile(cntl, &request, response, done);    
+
+    butil::IOBuf msg;
+    msg.append(filename);
+    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 
 }
 

@@ -20,6 +20,7 @@
 #include <brpc/stream.h>
 #include "echo.pb.h"
 #include <fstream>
+#include <sstream>
 
 DEFINE_bool(send_attachment, true, "Carry attachment along with response");
 DEFINE_int32(port, 8003, "TCP Port of this server");
@@ -35,7 +36,7 @@ typedef struct _STRUCT_STREAM{
         std::string filename;
         int64_t filelength;
         int64_t length;
-        std::ofstream fout;
+        std::fstream file;
 }STRUCT_STREAM;
 
 std::string exec_cmd(const char *command, std::string *final_msg)
@@ -111,41 +112,73 @@ std::string exec_cmd(const char *command, std::string *final_msg)
     }
 }
 
-typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFoutMap;
+typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFileMap;
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
     virtual int on_received_messages(brpc::StreamId id, 
                                      butil::IOBuf *const messages[], 
                                      size_t size) {
         size_t i = 0;
-        if(!streamfoutmap[id].fout.is_open()) {
+        if(!streamfilemap[id].file.is_open()) {
             std::string::size_type nPosB = (*messages[i]).to_string().find(" ");
             if (nPosB != std::string::npos){
-                streamfoutmap[id].filename = (*messages[i]).to_string().substr(0, nPosB);
-                streamfoutmap[id].filelength = atoi((*messages[i++]).to_string().substr(nPosB + 1).c_str())
+                streamfilemap[id].filename = (*messages[i]).to_string().substr(0, nPosB);
+                streamfilemap[id].filelength = atoi((*messages[i++]).to_string().substr(nPosB + 1).c_str());
             }else{
-                streamfoutmap[id].filename = (*messages[i++]).to_string();
-                streamfoutmap[id].filelength = -1;
+                streamfilemap[id].filelength = -1;
             }
-            streamfoutmap[id].length = 0;
-            streamfoutmap[id].fout.open(streamfoutmap[id].filename);
+            streamfilemap[id].length = 0;
+            if (streamfilemap[id].filelength >= 0) {
+                streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
+            }
+            else {
+                streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
+            }
         }
 
-        
-        for (; i < size; i++) {
-            streamfoutmap[id].fout.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
-            streamfoutmap[id].length += (*messages[i]).to_string().length();
-        }
+        //写文件
+        if (streamfilemap[id].filelength >= 0) {
+            for (; i < size; i++) {
+                streamfilemap[id].file.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
+                streamfilemap[id].length += (*messages[i]).to_string().length();
+            }
 
-        //文件传输完毕,返回文件MD5值
-        if (streamfoutmap[id].length == streamfoutmap[id].filelength){
-            streamfoutmap[id].fout.close();
-            std::string command = "md5sum " + streamfoutmap[id].filename;
-            std::string final_msg;
-            exec_cmd(command.c_str(), &final_msg);
+            //文件传输完毕,返回文件MD5值
+            if (streamfilemap[id].length == streamfilemap[id].filelength){
+                streamfilemap[id].file.close();
+
+                std::string command = "md5sum " + streamfilemap[id].filename;
+                std::string final_msg;
+                exec_cmd(command.c_str(), &final_msg);
+
+                std::string::size_type nPosB = final_msg.find(" "); 
+
+                if (nPosB != std::string::npos) {
+                    butil::IOBuf msg;
+                    msg.append(final_msg.substr(0, nPosB));
+                    CHECK_EQ(0, brpc::StreamWrite(id, msg));
+                }
+            }
+        }else{  //读文件
+            streamfilemap[id].file.seekg(0, std::ios::end);
+            int64_t filelength = streamfilemap[id].file.tellg();
+            streamfilemap[id].file.seekg(0, std::ios::beg);
+
+            std::stringstream filelengthstream;
+            filelengthstream << filelength;
+
             butil::IOBuf msg;
-            msg.append(final_msg);
+            msg.append(streamfilemap[id].filename + " " + filelengthstream.str());
             CHECK_EQ(0, brpc::StreamWrite(id, msg));
+
+            while(!streamfilemap[id].file.eof()) {
+                msg.clear();
+                char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
+                int32_t length = streamfilemap[id].file.read(buffer, FLAGS_default_buffer_size).gcount();
+                msg.append(buffer, length);
+                CHECK_EQ(0, brpc::StreamWrite(id, msg));  
+            }
+
         }
         
         return 0;
@@ -153,15 +186,15 @@ public:
     virtual void on_idle_timeout(brpc::StreamId id) {
         LOG(INFO) << "Stream=" << id << " has no data transmission for a while";
         brpc::StreamClose(id);
-        streamfoutmap[id].fout.close();
+        streamfilemap[id].file.close();
     }
     virtual void on_closed(brpc::StreamId id) {
         LOG(INFO) << "Stream=" << id << " is closed";
         brpc::StreamClose(id);
-        streamfoutmap[id].fout.close();
+        streamfilemap[id].file.close();
     }
 private:
-    StreamFoutMap streamfoutmap;
+    StreamFileMap streamfilemap;
 };
 
 // Your implementation of example::EchoService
@@ -214,32 +247,13 @@ public:
         brpc::Controller* cntl =
             static_cast<brpc::Controller*>(cntl_base);
 
-        
-
         brpc::StreamOptions stream_options;
-        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+        stream_options.handler = &_receiver;
         if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {
             cntl->SetFailed("Fail to accept stream");
             return;
         }
-
-        std::ifstream fin(request->filename());
-        if (!fin) {
-            cntl->SetFailed("Failed To Open the File!");
-            return;
-        }
-
-        butil::IOBuf msg;
-        msg.append(request->filename());
-        CHECK_EQ(0, brpc::StreamWrite(_sd, msg));
-
-        while(!fin.eof()) {
-            msg.clear();
-            char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
-            int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
-            msg.append(buffer, length);
-            CHECK_EQ(0, brpc::StreamWrite(_sd, msg));  
-        }
+        response->set_message("123");
 
     }
 private:
