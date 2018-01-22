@@ -32,6 +32,42 @@ DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
 DEFINE_int32(default_buffer_size, 1024, "");
 DEFINE_int32(stream_max_buf_size, -1, "");
 
+typedef struct _STRUCT_STREAM{
+        std::string filename;
+        int64_t filelength;
+        std::ofstream fout;
+}STRUCT_STREAM;
+
+typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFoutMap;
+class StreamReceiver : public brpc::StreamInputHandler {
+public:
+    virtual int on_received_messages(brpc::StreamId id, 
+                                     butil::IOBuf *const messages[], 
+                                     size_t size) {
+        size_t i = 0;
+        if(!streamfoutmap[id].fout.is_open()) {
+            streamfoutmap[id].fout.open((*messages[i++]).to_string());        
+        }
+        
+        for (; i < size; i++) {
+            streamfoutmap[id].fout.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
+        }
+        
+        return 0;
+    }
+    virtual void on_idle_timeout(brpc::StreamId id) {
+        LOG(INFO) << "Stream=" << id << " has no data transmission for a while";
+        brpc::StreamClose(id);
+        streamfoutmap[id].fout.close();
+    }
+    virtual void on_closed(brpc::StreamId id) {
+        LOG(INFO) << "Stream=" << id << " is closed";
+        brpc::StreamClose(id);
+        streamfoutmap[id].fout.close();
+    }
+private:
+    StreamFoutMap streamfoutmap;
+};
 
 void HandleCommandResponse(
         brpc::Controller* cntl,
@@ -65,6 +101,24 @@ void HandleFileResponse(
         << ": " << response->message() << " (attached="
         << cntl->response_attachment() << ")"
         << " latency=" << cntl->latency_us() << "us";
+}
+
+void HandleGetFileResponse(
+        brpc::Controller* cntl,
+        exec::FileResponse* response) {
+
+    std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+    std::unique_ptr<exec::FileResponse> response_guard(response);
+
+    if (cntl->Failed()) {
+        LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
+        return;
+    }
+    LOG(INFO) << "Received response from " << cntl->remote_side()
+        << ": " << response->message() << " (attached="
+        << cntl->response_attachment() << ")"
+        << " latency=" << cntl->latency_us() << "us";
+
 }
 
 
@@ -121,14 +175,7 @@ void PostFile() {
 
     exec::FileResponse* response = new exec::FileResponse();
     brpc::Controller* cntl = new brpc::Controller();
-    brpc::StreamId stream;
-    brpc::StreamOptions stream_options;
-    stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-    if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-        LOG(ERROR) << "Fail to create stream";
-        return;
-    }
-
+    
     exec::FileRequest request;
     std::string filename = "test.conf_bak";
 
@@ -137,8 +184,18 @@ void PostFile() {
         LOG(INFO) << "Failed To Open the File!";
         return;
     }
+
+    brpc::StreamId stream;
+    brpc::StreamOptions stream_options;
+
+    stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+    if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+        LOG(ERROR) << "Fail to create stream";
+        return;
+    }
+
     int64_t filelength;
-    
+
     fin.seekg(0, std::ios::end);
     filelength = fin.tellg();
     request.set_filelength(filelength); 
@@ -148,8 +205,7 @@ void PostFile() {
 
     google::protobuf::Closure* done = brpc::NewCallback(
         &HandleFileResponse, cntl, response);
-    stub.PostFile(cntl, &request, response, done);
-    
+    stub.PostFile(cntl, &request, response, done);    
 
 
     butil::IOBuf msg;
@@ -163,6 +219,45 @@ void PostFile() {
         msg.append(buffer, length);
         CHECK_EQ(0, brpc::StreamWrite(stream, msg));  
     }
+}
+
+void GetFile() {
+    brpc::Channel channel;
+
+
+    brpc::ChannelOptions options;
+    options.protocol = FLAGS_protocol;
+    options.connection_type = FLAGS_connection_type;
+    options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
+    options.max_retry = FLAGS_max_retry;
+    if (channel.Init(FLAGS_server.c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
+        LOG(ERROR) << "Fail to initialize channel";
+        return;
+    }
+    exec::EchoService_Stub stub(&channel);
+
+    exec::FileResponse* response = new exec::FileResponse();
+    brpc::Controller* cntl = new brpc::Controller();
+    
+    exec::FileRequest request;
+
+    request.set_filename("test.conf");
+
+    brpc::StreamId stream;
+    brpc::StreamOptions stream_options;
+    StreamReceiver _receiver;
+
+    stream_options.handler = &_receiver;
+
+
+    if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+        LOG(ERROR) << "Fail to create stream";
+        return;
+    }
+
+    google::protobuf::Closure* done = brpc::NewCallback(
+        &HandleGetFileResponse, cntl, response);
+    stub.GetFile(cntl, &request, response, done);
 
 }
 
@@ -170,7 +265,8 @@ int main(int argc, char* argv[]) {
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
       
-    PostFile();
+    GetFile();
+    //GetFile();
     sleep(1);
 
     LOG(INFO) << "EchoClient is going to quit";

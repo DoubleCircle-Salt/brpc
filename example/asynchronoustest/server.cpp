@@ -27,6 +27,7 @@ DEFINE_int32(idle_timeout_s, -1, "Connection will be closed if there is no "
              "read/write operations during the last `idle_timeout_s'");
 DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
              "(waiting for client to close connection before server stops)");
+DEFINE_int32(stream_max_buf_size, -1, "");
 
 DEFINE_int32(default_buffer_size, 1024, "");
 
@@ -181,6 +182,42 @@ public:
             return;
         }
         response->set_message("123");
+    }
+    virtual void GetFile(google::protobuf::RpcController* cntl_base,
+                      const exec::FileRequest* request,
+                      exec::FileResponse* response,
+                      google::protobuf::Closure* done) {
+        brpc::ClosureGuard done_guard(done);
+        brpc::Controller* cntl =
+            static_cast<brpc::Controller*>(cntl_base);
+
+        
+
+        brpc::StreamOptions stream_options;
+        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+        if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {
+            cntl->SetFailed("Fail to accept stream");
+            return;
+        }
+
+        std::ifstream fin(request->filename());
+        if (!fin) {
+            cntl->SetFailed("Failed To Open the File!");
+            return;
+        }
+
+        butil::IOBuf msg;
+        msg.append(request->filename());
+        CHECK_EQ(0, brpc::StreamWrite(_sd, msg));
+
+        while(!fin.eof()) {
+            msg.clear();
+            char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
+            int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
+            msg.append(buffer, length);
+            CHECK_EQ(0, brpc::StreamWrite(_sd, msg));  
+        }
+
     }
 private:
     StreamReceiver _receiver;

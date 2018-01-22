@@ -23,4 +23,5 @@ message FileResponse {
 service EchoService {
       rpc ExecCommand(CommandRequest) returns (CommandResponse);
       rpc PostFile(FileRequest) returns (FileResponse);
+      rpc GetFile(FileRequest) returns (FileResponse);
 };
