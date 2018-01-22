@@ -125,6 +125,7 @@ public:
                 streamfilemap[id].filename = (*messages[i]).to_string().substr(0, nPosB);
                 streamfilemap[id].filelength = atoi((*messages[i++]).to_string().substr(nPosB + 1).c_str());
             }else{
+                streamfilemap[id].filename = (*messages[i++]).to_string()
                 streamfilemap[id].filelength = -1;
             }
             streamfilemap[id].length = 0;
