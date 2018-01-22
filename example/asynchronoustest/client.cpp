@@ -14,33 +14,18 @@
 
 // A client sending requests to server asynchronously every 1 second.
 
-#include <gflags/gflags.h>
-#include <butil/logging.h>
+#include "common.h"
 #include <butil/time.h>
 #include <brpc/channel.h>
-#include <brpc/stream.h>
-#include "echo.pb.h"
-#include <fstream>
-#include <sstream>
 
-DEFINE_bool(send_attachment, true, "Carry attachment along with requests");
+
 DEFINE_string(protocol, "baidu_std", "Protocol type. Defined in src/brpc/options.proto");
 DEFINE_string(connection_type, "", "Connection type. Available values: single, pooled, short");
 DEFINE_string(server, "0.0.0.0:8003", "IP Address of server");
 DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 100, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)"); 
-DEFINE_int32(default_buffer_size, 1024, "");
-DEFINE_int32(stream_max_buf_size, -1, "");
 
-typedef struct _STRUCT_STREAM{
-        std::string filename;
-        int64_t filelength;
-        int64_t length;
-        std::ofstream file;
-}STRUCT_STREAM;
-
-typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFileMap;
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
     virtual int on_received_messages(brpc::StreamId id, 
