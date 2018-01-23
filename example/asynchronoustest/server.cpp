@@ -1,19 +1,3 @@
-// Copyright (c) 2014 Baidu, Inc.
-// 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-// 
-//     http://www.apache.org/licenses/LICENSE-2.0
-// 
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-// A server to receive EchoRequest and send back EchoResponse.
-
 #include "common.h"
 #include <brpc/server.h>
 
@@ -22,6 +6,8 @@ DEFINE_int32(idle_timeout_s, -1, "Connection will be closed if there is no "
              "read/write operations during the last `idle_timeout_s'");
 DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
              "(waiting for client to close connection before server stops)");
+
+std::string local_side;
 
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
@@ -66,7 +52,7 @@ public:
 
                 if (nPosB != std::string::npos) {
                     butil::IOBuf msg;
-                    msg.append(final_msg.substr(0, nPosB));
+                    msg.append(local_side + ":" + final_msg.substr(0, nPosB));
                     CHECK_EQ(0, brpc::StreamWrite(id, msg));
                 }
             }
@@ -79,7 +65,7 @@ public:
             filelengthstream << filelength;
 
             butil::IOBuf msg;
-            msg.append(streamfilemap[id].filename + " " + filelengthstream.str());
+            msg.append(local_side + "/" + streamfilemap[id].filename + " " + filelengthstream.str());
             CHECK_EQ(0, brpc::StreamWrite(id, msg));
 
             while(!streamfilemap[id].file.eof()) {
@@ -124,13 +110,12 @@ public:
 
         brpc::Controller* cntl =
             static_cast<brpc::Controller*>(cntl_base);
+        local_side = butil::endpoint2str(cntl->local_side()).c_str();
 
         std::string final_msg;
         std::string flag = exec_cmd(request->message().c_str(), &final_msg);
         response->set_message(final_msg);
         if (FLAGS_send_attachment) {
-            // Set attachment which is wired to network directly instead of
-            // being serialized into protobuf messages.
             cntl->response_attachment().append(flag);
         }
     }
@@ -141,6 +126,7 @@ public:
         brpc::ClosureGuard done_guard(done);
         brpc::Controller* cntl =
             static_cast<brpc::Controller*>(cntl_base);
+        local_side = butil::endpoint2str(cntl->local_side()).c_str();
 
         brpc::StreamOptions stream_options;
         stream_options.handler = &_receiver;
@@ -157,6 +143,7 @@ public:
         brpc::ClosureGuard done_guard(done);
         brpc::Controller* cntl =
             static_cast<brpc::Controller*>(cntl_base);
+        local_side = butil::endpoint2str(cntl->local_side()).c_str();
 
         brpc::StreamOptions stream_options;
         stream_options.handler = &_receiver;
