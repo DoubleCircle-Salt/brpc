@@ -54,11 +54,11 @@ public:
                 streamfilemap[id].length += (*messages[i]).to_string().length();
             }
 
-            //文件传输完毕,返回文件MD5值
+            //文件传输完毕,返回文件长度
             if (streamfilemap[id].length == streamfilemap[id].filelength){
                 streamfilemap[id].file.close();
 
-                std::string command = "md5sum " + streamfilemap[id].filename;
+                std::string command = "ls -l " + streamfilemap[id].filename + " | awk '{print $5}'";
                 std::string final_msg;
                 exec_cmd(command.c_str(), &final_msg);
 

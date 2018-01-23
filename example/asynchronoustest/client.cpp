@@ -188,10 +188,9 @@ void PostFile() {
 
     fin.seekg(0, std::ios::end);
     filelength = fin.tellg();
-    request.set_filelength(filelength); 
     fin.seekg(0, std::ios::beg);
 
-    request.set_filename(filename);
+    request.set_message("123");
 
     google::protobuf::Closure* done = brpc::NewCallback(
         &HandleFileResponse, cntl, response);
@@ -245,8 +244,7 @@ void GetFile() {
         return;
     }
 
-    request.set_filename(filename);
-    request.set_filelength(-1);
+    request.set_message(filename);
 
     google::protobuf::Closure* done = brpc::NewCallback(
         &HandleFileResponse, cntl, response);
@@ -262,7 +260,7 @@ int main(int argc, char* argv[]) {
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
       
-    GetFile();
+    PostFile();
     //GetFile();
     sleep(1);
 
