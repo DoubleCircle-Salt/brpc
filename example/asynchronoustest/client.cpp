@@ -24,7 +24,11 @@ DEFINE_string(connection_type, "", "Connection type. Available values: single, p
 DEFINE_string(server, "0.0.0.0:8003", "IP Address of server");
 DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 100, "RPC timeout in milliseconds");
-DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)"); 
+DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
+
+#define EXEC_COMMAND 1
+#define EXEC_POSTFILE 2
+#define EXEC_GETFILE 3
 
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
@@ -87,49 +91,45 @@ void HandleResponse(
         LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
         return;
     }
-    LOG(INFO) << "Received response from " << cntl->remote_side()
+    LOG(INFO) << cntl->remote_side()
         << ": " << response->message() << " (attached="
         << cntl->response_attachment() << ")"
         << " latency=" << cntl->latency_us() << "us";
 }
 
 
-void ExecCommand() {
-
-    brpc::Channel channel;
-
+void ExecCommand(std::string command, std::string serverlist[], size_t servernum) {
 
     brpc::ChannelOptions options;
     options.protocol = FLAGS_protocol;
     options.connection_type = FLAGS_connection_type;
     options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
     options.max_retry = FLAGS_max_retry;
-    if (channel.Init(FLAGS_server.c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
-        LOG(ERROR) << "Fail to initialize channel";
-        return;
+
+    for (size_t i = 0; i < servernum; i++) {
+
+        brpc::Channel channel;
+        if (channel.Init(serverlist[i].c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
+            LOG(ERROR) << "Fail to initialize channel";
+            return;
+        }
+
+        exec::EchoService_Stub stub(&channel);
+
+        exec::Response* response = new exec::Response();
+        brpc::Controller* cntl = new brpc::Controller();
+
+
+        exec::Request request;
+        request.set_message(command);
+
+        google::protobuf::Closure* done = brpc::NewCallback(
+            &HandleResponse, cntl, response);
+        stub.ExecCommand(cntl, &request, response, done);
     }
-
-    exec::EchoService_Stub stub(&channel);
-
-    exec::Response* response = new exec::Response();
-    brpc::Controller* cntl = new brpc::Controller();
-
-
-    exec::Request request;
-    request.set_message("mkdir /home/yanyuanyuan/brpc/brpc/example/asynchronoustest/123");
-
-    cntl->set_log_id(0);  
-    if (FLAGS_send_attachment) {
-
-        cntl->request_attachment().append("foo");
-    }
-
-    google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleResponse, cntl, response);
-    stub.ExecCommand(cntl, &request, response, done);
 }
 
-void PostFile() {
+void PostFile(std::string filename, std::string serverlist[], size_t servernum) {
     brpc::Channel channel;
 
 
@@ -149,7 +149,7 @@ void PostFile() {
     brpc::Controller* cntl = new brpc::Controller();
     
     exec::Request request;
-    std::string filename = "test.conf_bak";
+    filename = "test.conf_bak";
 
     std::ifstream fin("test.conf");
     if (!fin) {
@@ -196,7 +196,7 @@ void PostFile() {
     }
 }
 
-void GetFile() {
+void GetFile(std::string filename, std::string serverlist[], size_t servernum) {
     brpc::Channel channel;
 
     brpc::ChannelOptions options;
@@ -215,7 +215,7 @@ void GetFile() {
     brpc::Controller* cntl = new brpc::Controller();
     
     exec::Request request;
-    std::string filename = "test.conf_bak";
+    filename = "test.conf_bak";
 
     brpc::StreamId stream;
     brpc::StreamOptions stream_options;
@@ -240,12 +240,38 @@ void GetFile() {
 
 }
 
+void JudeCommandType(int32_t commandtype, std::string serverstring, std::string commandname) {
+    std::string serverlist[FLAGS_default_buffer_size];
+    size_t i = 0;
+    while (true) {
+        std::string::size_type nPosB = serverstring.find(" ");
+        if (nPosB != std::string::npos) {
+            serverlist[i++] = serverstring.substr(0, nPosB);
+            serverstring = serverstring.substr(nPosB + 1);
+        }else {
+            serverlist[i++] = serverstring;
+            break;
+        }
+    }
+    switch(commandtype) {
+        case EXEC_COMMAND:
+            ExecCommand(commandname, serverlist, i);
+            break;
+        case EXEC_POSTFILE:
+            PostFile(commandname, serverlist, i);
+            break;
+        case EXEC_GETFILE:
+            GetFile(commandname, serverlist, i);
+            break;
+    }
+}
+
 int main(int argc, char* argv[]) {
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
-    ExecCommand();
-    //PostFile();
-    //GetFile();
+
+    JudeCommandType(EXEC_COMMAND, "127.0.0.1:8003", "mkdir /home/yanyuanyuan/brpc/brpc_test/example/asynchronoustest/123");
+    
     sleep(100);
     LOG(INFO) << "EchoClient is going to quit";
     return 0;
