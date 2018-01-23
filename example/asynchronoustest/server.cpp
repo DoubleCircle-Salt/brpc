@@ -116,8 +116,8 @@ public:
         brpc::StreamClose(_sd);
     };
     virtual void ExecCommand(google::protobuf::RpcController* cntl_base,
-                      const exec::CommandRequest* request,
-                      exec::CommandResponse* response,
+                      const exec::Request* request,
+                      exec::Response* response,
                       google::protobuf::Closure* done) {
 
         brpc::ClosureGuard done_guard(done);
@@ -126,7 +126,7 @@ public:
             static_cast<brpc::Controller*>(cntl_base);
 
         std::string final_msg;
-        std::string flag = exec_cmd(request->command().c_str(), &final_msg);
+        std::string flag = exec_cmd(request->message().c_str(), &final_msg);
         response->set_message(final_msg);
         if (FLAGS_send_attachment) {
             // Set attachment which is wired to network directly instead of
@@ -135,8 +135,8 @@ public:
         }
     }
     virtual void PostFile(google::protobuf::RpcController* cntl_base,
-                      const exec::FileRequest* request,
-                      exec::FileResponse* response,
+                      const exec::Request* request,
+                      exec::Response* response,
                       google::protobuf::Closure* done) {
         brpc::ClosureGuard done_guard(done);
         brpc::Controller* cntl =
@@ -151,8 +151,8 @@ public:
         response->set_message("123");
     }
     virtual void GetFile(google::protobuf::RpcController* cntl_base,
-                      const exec::FileRequest* request,
-                      exec::FileResponse* response,
+                      const exec::Request* request,
+                      exec::Response* response,
                       google::protobuf::Closure* done) {
         brpc::ClosureGuard done_guard(done);
         brpc::Controller* cntl =

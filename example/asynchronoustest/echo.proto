@@ -3,24 +3,16 @@ package exec;
 
 option cc_generic_services = true;
 
-message CommandRequest {
-	required string command = 1;
-};
-
-message CommandResponse {
+message Request {
 	required string message = 1;
 };
 
-message FileRequest {
-	required string message = 1;
-};
-
-message FileResponse {
+message Response {
 	required string message = 1;
 };
 
 service EchoService {
-      rpc ExecCommand(CommandRequest) returns (CommandResponse);
-      rpc PostFile(FileRequest) returns (FileResponse);
-      rpc GetFile(FileRequest) returns (FileResponse);
+      rpc ExecCommand(Request) returns (Response);
+      rpc PostFile(Request) returns (Response);
+      rpc GetFile(Request) returns (Response);
 };

@@ -76,12 +76,12 @@ private:
     StreamFileMap streamfilemap;
 };
 
-void HandleCommandResponse(
+void HandleResponse(
         brpc::Controller* cntl,
-        exec::CommandResponse* response) {
+        exec::Response* response) {
 
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-    std::unique_ptr<exec::CommandResponse> response_guard(response);
+    std::unique_ptr<exec::Response> response_guard(response);
 
     if (cntl->Failed()) {
         LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
@@ -93,22 +93,6 @@ void HandleCommandResponse(
         << " latency=" << cntl->latency_us() << "us";
 }
 
-void HandleFileResponse(
-        brpc::Controller* cntl,
-        exec::FileResponse* response) {
-
-    std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-    std::unique_ptr<exec::FileResponse> response_guard(response);
-
-    if (cntl->Failed()) {
-        LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
-        return;
-    }
-    LOG(INFO) << "Received response from " << cntl->remote_side()
-        << ": " << response->message() << " (attached="
-        << cntl->response_attachment() << ")"
-        << " latency=" << cntl->latency_us() << "us";
-}
 
 void ExecCommand() {
 
@@ -127,12 +111,12 @@ void ExecCommand() {
 
     exec::EchoService_Stub stub(&channel);
 
-    exec::CommandResponse* response = new exec::CommandResponse();
+    exec::Response* response = new exec::Response();
     brpc::Controller* cntl = new brpc::Controller();
 
 
-    exec::CommandRequest request;
-    request.set_command("mkdir /home/yanyuanyuan/brpc/brpc/example/asynchronoustest/123");
+    exec::Request request;
+    request.set_message("mkdir /home/yanyuanyuan/brpc/brpc/example/asynchronoustest/123");
 
     cntl->set_log_id(0);  
     if (FLAGS_send_attachment) {
@@ -141,7 +125,7 @@ void ExecCommand() {
     }
 
     google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleCommandResponse, cntl, response);
+        &HandleResponse, cntl, response);
     stub.ExecCommand(cntl, &request, response, done);
 }
 
@@ -161,10 +145,10 @@ void PostFile() {
 
     exec::EchoService_Stub stub(&channel);
 
-    exec::FileResponse* response = new exec::FileResponse();
+    exec::Response* response = new exec::Response();
     brpc::Controller* cntl = new brpc::Controller();
     
-    exec::FileRequest request;
+    exec::Request request;
     std::string filename = "test.conf_bak";
 
     std::ifstream fin("test.conf");
@@ -193,7 +177,7 @@ void PostFile() {
     request.set_message("123");
 
     google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleFileResponse, cntl, response);
+        &HandleResponse, cntl, response);
     stub.PostFile(cntl, &request, response, done);    
 
     std::stringstream filelengthstream;
@@ -227,10 +211,10 @@ void GetFile() {
 
     exec::EchoService_Stub stub(&channel);
 
-    exec::FileResponse* response = new exec::FileResponse();
+    exec::Response* response = new exec::Response();
     brpc::Controller* cntl = new brpc::Controller();
     
-    exec::FileRequest request;
+    exec::Request request;
     std::string filename = "test.conf_bak";
 
     brpc::StreamId stream;
@@ -247,7 +231,7 @@ void GetFile() {
     request.set_message(filename);
 
     google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleFileResponse, cntl, response);
+        &HandleResponse, cntl, response);
     stub.PostFile(cntl, &request, response, done);    
 
     butil::IOBuf msg;
@@ -259,11 +243,10 @@ void GetFile() {
 int main(int argc, char* argv[]) {
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
-      
-    PostFile();
+    ExecCommand();
+    //PostFile();
     //GetFile();
-    sleep(1);
-
+    sleep(100);
     LOG(INFO) << "EchoClient is going to quit";
     return 0;
 }
