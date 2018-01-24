@@ -43,18 +43,9 @@ public:
             //文件传输完毕,返回文件长度
             if (streamfilemap[id].length == streamfilemap[id].filelength){
                 streamfilemap[id].file.close();
-
-                std::string command = "ls -l " + streamfilemap[id].filename + " | awk '{print $5}'";
-                std::string final_msg;
-                exec_cmd(command.c_str(), &final_msg);
-
-                std::string::size_type nPosB = final_msg.find(" "); 
-
-                if (nPosB != std::string::npos) {
-                    butil::IOBuf msg;
-                    msg.append(local_side + ":" + final_msg.substr(0, nPosB));
-                    CHECK_EQ(0, brpc::StreamWrite(id, msg));
-                }
+                butil::IOBuf msg;
+                msg.append(local_side + ":文件长度验证正确");
+                CHECK_EQ(0, brpc::StreamWrite(id, msg));
             }
         }else{  //读文件
             streamfilemap[id].file.seekg(0, std::ios::end);
@@ -65,7 +56,7 @@ public:
             filelengthstream << filelength;
 
             butil::IOBuf msg;
-            msg.append(local_side + "/" + streamfilemap[id].filename + " " + filelengthstream.str());
+            msg.append(local_side + "/" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
             CHECK_EQ(0, brpc::StreamWrite(id, msg));
 
             while(!streamfilemap[id].file.eof()) {

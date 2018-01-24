@@ -113,113 +113,116 @@ void ExecCommand(std::string command, std::string serverlist[], size_t servernum
 }
 
 void PostFile(std::string filename, std::string serverlist[], size_t servernum) {
-    brpc::Channel channel;
-
 
     brpc::ChannelOptions options;
     options.protocol = FLAGS_protocol;
     options.connection_type = FLAGS_connection_type;
     options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
     options.max_retry = FLAGS_max_retry;
-    if (channel.Init(FLAGS_server.c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
-        LOG(ERROR) << "Fail to initialize channel";
-        return;
-    }
+    for (size_t i = 0; i < servernum; i++) {
 
-    exec::EchoService_Stub stub(&channel);
+        brpc::Channel channel;
+        if (channel.Init(serverlist[i].c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
+            LOG(ERROR) << "Fail to initialize channel";
+            return;
+        }
 
-    exec::Response* response = new exec::Response();
-    brpc::Controller* cntl = new brpc::Controller();
-    
-    exec::Request request;
-    filename = "test.conf_bak";
+        exec::EchoService_Stub stub(&channel);
 
-    std::ifstream fin("test.conf");
-    if (!fin) {
-        LOG(INFO) << "Failed To Open the File!";
-        return;
-    }
+        exec::Response* response = new exec::Response();
+        brpc::Controller* cntl = new brpc::Controller();
+        
+        exec::Request request;
 
-    brpc::StreamId stream;
-    brpc::StreamOptions stream_options;
-    static StreamReceiver _receiver;
+        std::ifstream fin(filename);
+        if (!fin) {
+            LOG(INFO) << "Failed To Open the File!";
+            return;
+        }
 
-    stream_options.handler = &_receiver;
-    stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-    if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-        LOG(ERROR) << "Fail to create stream";
-        return;
-    }
+        brpc::StreamId stream;
+        brpc::StreamOptions stream_options;
+        static StreamReceiver _receiver;
 
-    int64_t filelength;
+        stream_options.handler = &_receiver;
+        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+        if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+            LOG(ERROR) << "Fail to create stream";
+            return;
+        }
 
-    fin.seekg(0, std::ios::end);
-    filelength = fin.tellg();
-    fin.seekg(0, std::ios::beg);
+        int64_t filelength;
 
-    request.set_message("123");
+        fin.seekg(0, std::ios::end);
+        filelength = fin.tellg();
+        fin.seekg(0, std::ios::beg);
 
-    google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleResponse, cntl, response);
-    stub.PostFile(cntl, &request, response, done);    
+        request.set_message("123");
 
-    std::stringstream filelengthstream;
-    filelengthstream << filelength;
+        google::protobuf::Closure* done = brpc::NewCallback(
+            &HandleResponse, cntl, response);
+        stub.PostFile(cntl, &request, response, done);    
 
-    butil::IOBuf msg;
-    msg.append(filename + " " + filelengthstream.str());
-    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
+        std::stringstream filelengthstream;
+        filelengthstream << filelength;
 
-    while(!fin.eof()) {
-        msg.clear();
-        char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
-        int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
-        msg.append(buffer, length);
-        CHECK_EQ(0, brpc::StreamWrite(stream, msg));  
+        butil::IOBuf msg;
+        msg.append(GetRealname(filename) + " " + filelengthstream.str());
+        CHECK_EQ(0, brpc::StreamWrite(stream, msg));
+
+        while(!fin.eof()) {
+            msg.clear();
+            char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
+            int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
+            msg.append(buffer, length);
+            CHECK_EQ(0, brpc::StreamWrite(stream, msg));  
+        }
     }
 }
 
 void GetFile(std::string filename, std::string serverlist[], size_t servernum) {
-    brpc::Channel channel;
-
     brpc::ChannelOptions options;
     options.protocol = FLAGS_protocol;
     options.connection_type = FLAGS_connection_type;
     options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
     options.max_retry = FLAGS_max_retry;
-    if (channel.Init(FLAGS_server.c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
-        LOG(ERROR) << "Fail to initialize channel";
-        return;
+
+    for (size_t i = 0; i < servernum; i++) {
+
+        brpc::Channel channel;
+        if (channel.Init(FLAGS_server.c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
+            LOG(ERROR) << "Fail to initialize channel";
+            return;
+        }
+
+        exec::EchoService_Stub stub(&channel);
+
+        exec::Response* response = new exec::Response();
+        brpc::Controller* cntl = new brpc::Controller();
+        
+        exec::Request request;
+
+        brpc::StreamId stream;
+        brpc::StreamOptions stream_options;
+        static StreamReceiver _receiver;
+
+        stream_options.handler = &_receiver;
+        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+        if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+            LOG(ERROR) << "Fail to create stream";
+            return;
+        }
+
+        request.set_message(filename);
+
+        google::protobuf::Closure* done = brpc::NewCallback(
+            &HandleResponse, cntl, response);
+        stub.PostFile(cntl, &request, response, done);    
+
+        butil::IOBuf msg;
+        msg.append(filename);
+        CHECK_EQ(0, brpc::StreamWrite(stream, msg));
     }
-
-    exec::EchoService_Stub stub(&channel);
-
-    exec::Response* response = new exec::Response();
-    brpc::Controller* cntl = new brpc::Controller();
-    
-    exec::Request request;
-    filename = "test.conf_bak";
-
-    brpc::StreamId stream;
-    brpc::StreamOptions stream_options;
-    static StreamReceiver _receiver;
-
-    stream_options.handler = &_receiver;
-    stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-    if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-        LOG(ERROR) << "Fail to create stream";
-        return;
-    }
-
-    request.set_message(filename);
-
-    google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleResponse, cntl, response);
-    stub.PostFile(cntl, &request, response, done);    
-
-    butil::IOBuf msg;
-    msg.append(filename);
-    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 
 }
 

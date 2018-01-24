@@ -91,3 +91,15 @@ std::string exec_cmd(const char *command, std::string *final_msg)
     }
 }
 
+std::string GetRealname(std::string filename) {
+    while (true) {
+        std::string::size_type nPosB = filename.find("/");
+        if (nPosB != std::string::npos) {
+            filename = filename.substr(nPosB + 1);
+        }else {
+            break;
+        }
+    }
+    return filename;
+}
+
