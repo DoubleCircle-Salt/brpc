@@ -6,12 +6,15 @@ DEFINE_string(protocol, "baidu_std", "Protocol type. Defined in src/brpc/options
 DEFINE_string(connection_type, "", "Connection type. Available values: single, pooled, short");
 DEFINE_string(server, "0.0.0.0:8003", "IP Address of server");
 DEFINE_string(load_balancer, "", "The algorithm for load balancing");
-DEFINE_int32(timeout_ms, 100, "RPC timeout in milliseconds");
+DEFINE_int32(timeout_ms, 10000, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
+
+
 
 #define EXEC_COMMAND 1
 #define EXEC_POSTFILE 2
 #define EXEC_GETFILE 3
+StreamIpMap streamipmap;
 
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
@@ -102,6 +105,20 @@ void ExecCommand(std::string command, std::string serverlist[], size_t servernum
         exec::Response* response = new exec::Response();
         brpc::Controller* cntl = new brpc::Controller();
 
+        brpc::StreamId stream;
+        if (!streamipmap[serverlist[i]]) {
+            brpc::StreamOptions stream_options;
+            static StreamReceiver _receiver;
+            stream_options.handler = &_receiver;
+            stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+            if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+                LOG(ERROR) << "Fail to create stream";
+                return;
+            }
+            streamipmap[serverlist[i]] = stream;
+        }else {
+            stream = streamipmap[serverlist[i]];
+        }
 
         exec::Request request;
         request.set_message(command);
@@ -109,6 +126,10 @@ void ExecCommand(std::string command, std::string serverlist[], size_t servernum
         google::protobuf::Closure* done = brpc::NewCallback(
             &HandleResponse, cntl, response);
         stub.ExecCommand(cntl, &request, response, done);
+
+        butil::IOBuf msg;
+        msg.append("-2 " + command);
+        CHECK_EQ(0, brpc::StreamWrite(stream, msg));
     }
 }
 
@@ -141,14 +162,18 @@ void PostFile(std::string filename, std::string serverlist[], size_t servernum) 
         }
 
         brpc::StreamId stream;
-        brpc::StreamOptions stream_options;
-        static StreamReceiver _receiver;
-
-        stream_options.handler = &_receiver;
-        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-        if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-            LOG(ERROR) << "Fail to create stream";
-            return;
+        if (!streamipmap[serverlist[i]]) {
+            brpc::StreamOptions stream_options;
+            static StreamReceiver _receiver;
+            stream_options.handler = &_receiver;
+            stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+            if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+                LOG(ERROR) << "Fail to create stream";
+                return;
+            }
+            streamipmap[serverlist[i]] = stream;
+        }else {
+            stream = streamipmap[serverlist[i]];
         }
 
         int64_t filelength;
@@ -167,7 +192,7 @@ void PostFile(std::string filename, std::string serverlist[], size_t servernum) 
         filelengthstream << filelength;
 
         butil::IOBuf msg;
-        msg.append(GetRealname(filename) + " " + filelengthstream.str());
+        msg.append(FLAGS_command_type + "2 " + FLAGS_file_name + GetRealname(filename) + " " + filelengthstream.str());
         CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 
         while(!fin.eof()) {
@@ -202,15 +227,20 @@ void GetFile(std::string filename, std::string serverlist[], size_t servernum) {
         
         exec::Request request;
 
-        brpc::StreamId stream;
-        brpc::StreamOptions stream_options;
-        static StreamReceiver _receiver;
 
-        stream_options.handler = &_receiver;
-        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-        if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-            LOG(ERROR) << "Fail to create stream";
-            return;
+        brpc::StreamId stream;
+        if (!streamipmap[serverlist[i]]) {
+            brpc::StreamOptions stream_options;
+            static StreamReceiver _receiver;
+            stream_options.handler = &_receiver;
+            stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+            if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+                LOG(ERROR) << "Fail to create stream";
+                return;
+            }
+            streamipmap[serverlist[i]] = stream;
+        }else {
+            stream = streamipmap[serverlist[i]];
         }
 
         request.set_message(filename);
@@ -258,6 +288,7 @@ int main(int argc, char* argv[]) {
 
     //JudeCommandType(EXEC_COMMAND, "127.0.0.1:8003", "mkdir /home/yanyuanyuan/brpc/brpc_test/example/asynchronoustest/123");
     JudeCommandType(EXEC_POSTFILE, "127.0.0.1:8003", "test.conf");
+    //JudeCommandType(EXEC_GETFILE, "127.0.0.1:8003", "test.conf");
     //sleep(100);
     LOG(INFO) << "EchoClient is going to quit";
     return 0;

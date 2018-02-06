@@ -9,6 +9,8 @@
 DEFINE_bool(send_attachment, true, "Carry attachment along with response");
 DEFINE_int32(stream_max_buf_size, -1, "");
 DEFINE_int32(default_buffer_size, 1024, "");
+DEFINE_string(file_name, "filename:", "");
+DEFINE_string(command_type, "commandtype:", "");
 
 typedef struct _STRUCT_STREAM{
         std::string filename;
@@ -17,8 +19,7 @@ typedef struct _STRUCT_STREAM{
         std::fstream file;
 }STRUCT_STREAM;
 typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFileMap;
-
-
+typedef std::map<std::string, brpc::StreamId> StreamIpMap;
 
 std::string exec_cmd(const char *command, std::string *final_msg)
 {
