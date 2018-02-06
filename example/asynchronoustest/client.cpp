@@ -18,20 +18,31 @@ public:
                                      size_t size) {
         size_t i = 0;
         if(!streamfilemap[id].file.is_open()) {
-            std::string::size_type nPosB = (*messages[i]).to_string().find(" ");
-            if (nPosB != std::string::npos){
-                streamfilemap[id].filename = (*messages[i]).to_string().substr(0, nPosB);
-                streamfilemap[id].filelength = atoi((*messages[i++]).to_string().substr(nPosB + 1).c_str());
-            }else{
-                streamfilemap[id].filelength = -1;
-            }
-            streamfilemap[id].length = 0;
-            if (streamfilemap[id].filelength >= 0) {
-                streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
+            std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
+            if (nPosType != std::string::npos){
+                std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
+                streamfilemap[id].commandtype = atoi(streamstring.substr(0, 1).c_str());                
+                streamstring = streamstring.substr(2);
+                if (streamfilemap[id].commandtype == EXEC_POSTFILE||streamfilemap[id].commandtype == EXEC_COMMAND) {
+                    LOG(INFO) << streamstring;
+                }else if (streamfilemap[id].commandtype == EXEC_GETFILE) {
+                    std::string::size_type nPosSize = streamstring.find(" ");
+                    if(nPosSize != std::string::npos) {
+                        streamfilemap[id].filename = streamstring.substr(0, nPosSize);
+                        streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
+                        streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
+                    }else {
+                        return -1;
+                    }
+                }else {
+                    return -1;
+                }
+            }else {
+                return -1;
             }
         }
         //写文件
-        if (streamfilemap[id].filelength >= 0) {
+        if (streamfilemap[id].commandtype == EXEC_GETFILE) {
             for (; i < size; i++) {
                 streamfilemap[id].file.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
                 streamfilemap[id].length += (*messages[i]).to_string().length();
@@ -39,12 +50,7 @@ public:
             if (streamfilemap[id].length == streamfilemap[id].filelength) {
                 LOG(INFO) << "文件长度验证正确";
             }
-        }else {
-            for (; i < size; i++) {
-                LOG(INFO) << (*messages[i]).to_string();
-            }
-        }
-      
+        }      
         return 0;
     }
     virtual void on_idle_timeout(brpc::StreamId id) {

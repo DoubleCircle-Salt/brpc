@@ -31,7 +31,7 @@ void PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t 
         std::string::size_type nPosB = final_msg.find(" "); 
         if (nPosB != std::string::npos) {
             butil::IOBuf msg;
-            msg.append(FLAGS_command_type + "2" + local_side + ":" + final_msg.substr(0, nPosB));
+            msg.append(FLAGS_command_type + "2" + local_side + ": " + final_msg.substr(0, nPosB));
             CHECK_EQ(0, brpc::StreamWrite(id, msg));
         }
     }
@@ -96,7 +96,7 @@ public:
             }else {
                 return -1;
             }
-            
+
             if(streamfilemap[id].commandtype == EXEC_POSTFILE) {
                 streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
             }
