@@ -23,6 +23,12 @@ typedef struct _STRUCT_STREAM{
         int64_t length;
         std::fstream file;
 }STRUCT_STREAM;
+
+typedef struct _STRUCT_COMMAND{
+    int32_t commandtype;
+    std::string commandname;
+}STRUCT_COMMAND;
+
 typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFileMap;
 typedef std::map<std::string, brpc::StreamId> StreamIpMap;
 
