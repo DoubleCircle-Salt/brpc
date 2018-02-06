@@ -123,7 +123,7 @@ void ExecCommand(std::string command, std::string serverlist[], size_t servernum
         stub.ExecCommand(cntl, &request, response, done);
 
         butil::IOBuf msg;
-        msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command;
+        msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command);
         CHECK_EQ(0, brpc::StreamWrite(stream, msg));
     }
 }

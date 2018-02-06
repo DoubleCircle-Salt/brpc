@@ -65,15 +65,17 @@ public:
                                      size_t size) {
         size_t i = 0;
         if(!streamfilemap[id].file.is_open()) {
+            //获取命令类型
             std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
             if (nPosType != std::string::npos){
                 std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
+                //获取命令内容
                 std::string::size_type nPosName = streamstring.find(FLAGS_file_name);
 
                 if(nPosName != std::string::npos) {
                     streamfilemap[id].commandtype = atoi(streamstring.substr(0, nPosName).c_str());
                     streamstring = streamstring.substr(nPosName + FLAGS_file_name.length());
-
+                    //下载文件与执行命令不包含文件长度
                     if(streamfilemap[id].commandtype == EXEC_GETFILE||streamfilemap[id].commandtype == EXEC_COMMAND){
                         streamfilemap[id].filename = streamstring;
                         streamfilemap[id].filelength = -1;
@@ -94,6 +96,7 @@ public:
             }else {
                 return -1;
             }
+            
             if(streamfilemap[id].commandtype == EXEC_POSTFILE) {
                 streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
             }
