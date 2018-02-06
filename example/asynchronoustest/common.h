@@ -12,8 +12,13 @@ DEFINE_int32(default_buffer_size, 1024, "");
 DEFINE_string(file_name, "filename:", "");
 DEFINE_string(command_type, "commandtype:", "");
 
+#define EXEC_COMMAND 1
+#define EXEC_POSTFILE 2
+#define EXEC_GETFILE 3
+
 typedef struct _STRUCT_STREAM{
         std::string filename;
+        int32_t commandtype;
         int64_t filelength;
         int64_t length;
         std::fstream file;

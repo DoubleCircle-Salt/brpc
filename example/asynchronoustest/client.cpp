@@ -9,11 +9,6 @@ DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 10000, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
 
-
-
-#define EXEC_COMMAND 1
-#define EXEC_POSTFILE 2
-#define EXEC_GETFILE 3
 StreamIpMap streamipmap;
 
 class StreamReceiver : public brpc::StreamInputHandler {
@@ -192,7 +187,7 @@ void PostFile(std::string filename, std::string serverlist[], size_t servernum) 
         filelengthstream << filelength;
 
         butil::IOBuf msg;
-        msg.append(FLAGS_command_type + "2 " + FLAGS_file_name + GetRealname(filename) + " " + filelengthstream.str());
+        msg.append(FLAGS_command_type + "2" + FLAGS_file_name + GetRealname(filename) + " " + filelengthstream.str());
         CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 
         while(!fin.eof()) {
