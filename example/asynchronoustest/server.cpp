@@ -140,7 +140,7 @@ public:
     virtual ~EchoServiceImpl() {
         brpc::StreamClose(_sd);
     };
-    virtual void ExecCommand(google::protobuf::RpcController* cntl_base,
+    virtual void Echo(google::protobuf::RpcController* cntl_base,
                       const exec::Request* request,
                       exec::Response* response,
                       google::protobuf::Closure* done) {
@@ -158,41 +158,6 @@ public:
             return;
         }
         response->set_message("123");
-    }
-    virtual void PostFile(google::protobuf::RpcController* cntl_base,
-                      const exec::Request* request,
-                      exec::Response* response,
-                      google::protobuf::Closure* done) {
-        brpc::ClosureGuard done_guard(done);
-        brpc::Controller* cntl =
-            static_cast<brpc::Controller*>(cntl_base);
-        local_side = butil::endpoint2str(cntl->local_side()).c_str();
-
-        brpc::StreamOptions stream_options;
-        stream_options.handler = &_receiver;
-        if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {
-            cntl->SetFailed("Fail to accept stream");
-            return;
-        }
-        response->set_message("123");
-    }
-    virtual void GetFile(google::protobuf::RpcController* cntl_base,
-                      const exec::Request* request,
-                      exec::Response* response,
-                      google::protobuf::Closure* done) {
-        brpc::ClosureGuard done_guard(done);
-        brpc::Controller* cntl =
-            static_cast<brpc::Controller*>(cntl_base);
-        local_side = butil::endpoint2str(cntl->local_side()).c_str();
-
-        brpc::StreamOptions stream_options;
-        stream_options.handler = &_receiver;
-        if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {
-            cntl->SetFailed("Fail to accept stream");
-            return;
-        }
-        response->set_message("123");
-
     }
 private:
     StreamReceiver _receiver;

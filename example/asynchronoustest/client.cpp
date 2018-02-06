@@ -126,7 +126,7 @@ void ExecCommand(std::string command, std::string serverlist[], size_t servernum
 
         google::protobuf::Closure* done = brpc::NewCallback(
             &HandleResponse, cntl, response);
-        stub.ExecCommand(cntl, &request, response, done);
+        stub.Echo(cntl, &request, response, done);
 
         butil::IOBuf msg;
         msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command);
@@ -187,7 +187,7 @@ void PostFile(std::string filename, std::string serverlist[], size_t servernum) 
 
         google::protobuf::Closure* done = brpc::NewCallback(
             &HandleResponse, cntl, response);
-        stub.PostFile(cntl, &request, response, done);    
+        stub.Echo(cntl, &request, response, done);    
 
         std::stringstream filelengthstream;
         filelengthstream << filelength;
@@ -248,7 +248,7 @@ void GetFile(std::string filename, std::string serverlist[], size_t servernum) {
 
         google::protobuf::Closure* done = brpc::NewCallback(
             &HandleResponse, cntl, response);
-        stub.PostFile(cntl, &request, response, done);    
+        stub.Echo(cntl, &request, response, done);    
 
         butil::IOBuf msg;
         msg.append(FLAGS_command_type + "3" + FLAGS_file_name + filename);
@@ -287,8 +287,8 @@ int main(int argc, char* argv[]) {
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
 
-    //JudeCommandType(EXEC_COMMAND, "127.0.0.1:8003", "mkdir /home/yanyuanyuan/brpc/brpc_test/example/asynchronoustest/123");
-    JudeCommandType(EXEC_POSTFILE, "127.0.0.1:8003", "test.conf");
+    JudeCommandType(EXEC_COMMAND, "127.0.0.1:8003", "mkdir /home/yanyuanyuan/brpc/brpc_test/example/asynchronoustest/123");
+    //JudeCommandType(EXEC_POSTFILE, "127.0.0.1:8003", "test.conf");
     //JudeCommandType(EXEC_GETFILE, "127.0.0.1:8003", "test.conf");
     //sleep(100);
     LOG(INFO) << "EchoClient is going to quit";

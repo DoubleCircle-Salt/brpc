@@ -12,7 +12,5 @@ message Response {
 };
 
 service EchoService {
-      rpc ExecCommand(Request) returns (Response);
-      rpc PostFile(Request) returns (Response);
-      rpc GetFile(Request) returns (Response);
+      rpc Echo(Request) returns (Response);
 };
