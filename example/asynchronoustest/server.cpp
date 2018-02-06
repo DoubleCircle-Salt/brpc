@@ -60,37 +60,44 @@ public:
                 if(nPosName != std::string::npos) {
                     streamfilemap[id].commandtype = atoi(streamstring.substr(0, nPosName));
                     streamstring = streamstring.substr(nPosName + 1);
-                    std::string::size_type nPosSize = streamstring.find(" ");
-                    if(nPosSize != std::string::npos) {
-                        streamfilemap[id].filename = streamstring.substr(0, nPosSize);
-                        streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
-                    }else {
+
+                    if(streamfilemap[id].commandtype == EXEC_GETFILE||streamfilemap[id].commandtype == EXEC_COMMAND){
                         streamfilemap[id].filename = streamstring;
                         streamfilemap[id].filelength = -1;
+                    }else if(streamfilemap[id].commandtype == EXEC_POSTFILE){
+                        std::string::size_type nPosSize = streamstring.find(" ");
+                        if(nPosSize != std::string::npos) {
+                            streamfilemap[id].filename = streamstring.substr(0, nPosSize);
+                            streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
+                        }else {
+                            return -1;
+                        }
+                    }else {
+                        return -1;
                     }
                 }else {
-                    return;
+                    return -1;
                 }
             }else {
-                return;
+                return -1;
             }
-            if (streamfilemap[id].commandtype == EXEC_POSTFILE) {
+            if(streamfilemap[id].commandtype == EXEC_POSTFILE) {
                 streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
             }
-            else if (streamfilemap[id].commandtype == EXEC_GETFILE) {
+            else if(streamfilemap[id].commandtype == EXEC_GETFILE) {
                 streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
             }
         }
 
         switch(streamfilemap[id].commandtype) {
             case EXEC_COMMAND:
-                ExecCommandByStream();
+                //ExecCommandByStream();
                 break;
             case EXEC_POSTFILE:
-                PostFileByStream();                
+                PostFileByStream(streamfilemap, id, messages, size, i);                
                 break;
             case EXEC_GETFILE:
-                GetFileByStream();
+                GetFileByStream(streamfilemap, id, messages, size, i);
                 break;
             default:
                 break;
