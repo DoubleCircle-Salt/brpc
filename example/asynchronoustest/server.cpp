@@ -8,8 +8,17 @@ DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
              "(waiting for client to close connection before server stops)");
 
 std::string local_side;
+StreamFileMap streamfilemap;
 
-void PostFileByStream(StreamFileMap streamfilemap, brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
+void ExecCommandByStream(brpc::StreamId id) {
+    std::string final_msg;
+    exec_cmd(streamfilemap[id].filename.c_str(), &final_msg);
+    butil::IOBuf msg;
+    msg.append(FLAGS_command_type + "1" + local_side + ":" + final_msg);
+    CHECK_EQ(0, brpc::StreamWrite(id, msg));
+}
+
+void PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     for (; i < size; i++) {
         streamfilemap[id].file.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
         streamfilemap[id].length += (*messages[i]).to_string().length();
@@ -22,18 +31,22 @@ void PostFileByStream(StreamFileMap streamfilemap, brpc::StreamId id, butil::IOB
         std::string::size_type nPosB = final_msg.find(" "); 
         if (nPosB != std::string::npos) {
             butil::IOBuf msg;
-            msg.append(local_side + ":" + final_msg.substr(0, nPosB));
+            msg.append(FLAGS_command_type + "2" + local_side + ":" + final_msg.substr(0, nPosB));
             CHECK_EQ(0, brpc::StreamWrite(id, msg));
         }
     }
 }
 
-void GetFileByStream(StreamFileMap streamfilemap, brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
+void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     streamfilemap[id].file.seekg(0, std::ios::end);
     int64_t filelength = streamfilemap[id].file.tellg();
     streamfilemap[id].file.seekg(0, std::ios::beg);
+
+    std::stringstream filelengthstream;
+    filelengthstream << filelength;
+
     butil::IOBuf msg;
-    msg.append(local_side + "/" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
+    msg.append(FLAGS_command_type + "3" + FLAGS_file_name + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
     while(!streamfilemap[id].file.eof()) {
         msg.clear();
@@ -54,12 +67,12 @@ public:
         if(!streamfilemap[id].file.is_open()) {
             std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
             if (nPosType != std::string::npos){
-                std::string streamstring = (*messages[i]).to_string().substr(nPosB + 1);
+                std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
                 std::string::size_type nPosName = streamstring.find(FLAGS_file_name);
 
                 if(nPosName != std::string::npos) {
-                    streamfilemap[id].commandtype = atoi(streamstring.substr(0, nPosName));
-                    streamstring = streamstring.substr(nPosName + 1);
+                    streamfilemap[id].commandtype = atoi(streamstring.substr(0, nPosName).c_str());
+                    streamstring = streamstring.substr(nPosName + FLAGS_file_name.length());
 
                     if(streamfilemap[id].commandtype == EXEC_GETFILE||streamfilemap[id].commandtype == EXEC_COMMAND){
                         streamfilemap[id].filename = streamstring;
@@ -91,13 +104,13 @@ public:
 
         switch(streamfilemap[id].commandtype) {
             case EXEC_COMMAND:
-                //ExecCommandByStream();
+                ExecCommandByStream(id);
                 break;
             case EXEC_POSTFILE:
-                PostFileByStream(streamfilemap, id, messages, size, i);                
+                PostFileByStream(id, messages, size, i);                
                 break;
             case EXEC_GETFILE:
-                GetFileByStream(streamfilemap, id, messages, size, i);
+                GetFileByStream(id, messages, size, i);
                 break;
             default:
                 break;
@@ -115,7 +128,6 @@ public:
         streamfilemap[id].file.close();
     }
 private:
-    StreamFileMap streamfilemap;
 };
 
 // Your implementation of example::EchoService
@@ -136,12 +148,13 @@ public:
             static_cast<brpc::Controller*>(cntl_base);
         local_side = butil::endpoint2str(cntl->local_side()).c_str();
 
-        std::string final_msg;
-        std::string flag = exec_cmd(request->message().c_str(), &final_msg);
-        response->set_message(final_msg);
-        if (FLAGS_send_attachment) {
-            cntl->response_attachment().append(flag);
+        brpc::StreamOptions stream_options;
+        stream_options.handler = &_receiver;
+        if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {
+            cntl->SetFailed("Fail to accept stream");
+            return;
         }
+        response->set_message("123");
     }
     virtual void PostFile(google::protobuf::RpcController* cntl_base,
                       const exec::Request* request,
