@@ -85,75 +85,27 @@ void HandleResponse(
 }
 
 
-void ExecCommand(std::string command, std::string serverlist[], size_t servernum) {
+void ExecCommand(std::string command, brpc::StreamId stream, brpc::Channel *channel) {
 
-    brpc::ChannelOptions options;
-    options.protocol = FLAGS_protocol;
-    options.connection_type = FLAGS_connection_type;
-    options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
-    options.max_retry = FLAGS_max_retry;
+    exec::EchoService_Stub stub(channel);
+    exec::Response* response = new exec::Response();
+    exec::Request request;
+    request.set_message(command);
 
-    for (size_t i = 0; i < servernum; i++) {
+    google::protobuf::Closure* done = brpc::NewCallback(
+        &HandleResponse, cntl, response);
+    stub.Echo(cntl, &request, response, done);
 
-        brpc::Channel channel;
-        if (channel.Init(serverlist[i].c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
-            LOG(ERROR) << "Fail to initialize channel";
-            return;
-        }
+    butil::IOBuf msg;
+    msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command);
+    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 
-        exec::EchoService_Stub stub(&channel);
-
-        exec::Response* response = new exec::Response();
-        brpc::Controller* cntl = new brpc::Controller();
-
-        brpc::StreamId stream;
-        if (!streamipmap[serverlist[i]]) {
-            brpc::StreamOptions stream_options;
-            static StreamReceiver _receiver;
-            stream_options.handler = &_receiver;
-            stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-            if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-                LOG(ERROR) << "Fail to create stream";
-                return;
-            }
-            streamipmap[serverlist[i]] = stream;
-        }else {
-            stream = streamipmap[serverlist[i]];
-        }
-
-        exec::Request request;
-        request.set_message(command);
-
-        google::protobuf::Closure* done = brpc::NewCallback(
-            &HandleResponse, cntl, response);
-        stub.Echo(cntl, &request, response, done);
-
-        butil::IOBuf msg;
-        msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command);
-        CHECK_EQ(0, brpc::StreamWrite(stream, msg));
-    }
 }
 
-void PostFile(std::string filename, std::string serverlist[], size_t servernum) {
+void PostFile(std::string filename, brpc::StreamId stream, brpc::Channel *channel) {
 
-    brpc::ChannelOptions options;
-    options.protocol = FLAGS_protocol;
-    options.connection_type = FLAGS_connection_type;
-    options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
-    options.max_retry = FLAGS_max_retry;
-    for (size_t i = 0; i < servernum; i++) {
-
-        brpc::Channel channel;
-        if (channel.Init(serverlist[i].c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
-            LOG(ERROR) << "Fail to initialize channel";
-            return;
-        }
-
-        exec::EchoService_Stub stub(&channel);
-
+        exec::EchoService_Stub stub(channel);
         exec::Response* response = new exec::Response();
-        brpc::Controller* cntl = new brpc::Controller();
-        
         exec::Request request;
 
         std::ifstream fin(filename);
@@ -162,25 +114,8 @@ void PostFile(std::string filename, std::string serverlist[], size_t servernum) 
             return;
         }
 
-        brpc::StreamId stream;
-        if (!streamipmap[serverlist[i]]) {
-            brpc::StreamOptions stream_options;
-            static StreamReceiver _receiver;
-            stream_options.handler = &_receiver;
-            stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-            if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-                LOG(ERROR) << "Fail to create stream";
-                return;
-            }
-            streamipmap[serverlist[i]] = stream;
-        }else {
-            stream = streamipmap[serverlist[i]];
-        }
-
-        int64_t filelength;
-
         fin.seekg(0, std::ios::end);
-        filelength = fin.tellg();
+        int64_t filelength = fin.tellg();
         fin.seekg(0, std::ios::beg);
 
         request.set_message("123");
@@ -206,43 +141,11 @@ void PostFile(std::string filename, std::string serverlist[], size_t servernum) 
     }
 }
 
-void GetFile(std::string filename, std::string serverlist[], size_t servernum) {
-    brpc::ChannelOptions options;
-    options.protocol = FLAGS_protocol;
-    options.connection_type = FLAGS_connection_type;
-    options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
-    options.max_retry = FLAGS_max_retry;
+void GetFile(std::string filename, brpc::StreamId stream, brpc::Channel *channel) {
 
-    for (size_t i = 0; i < servernum; i++) {
-
-        brpc::Channel channel;
-        if (channel.Init(FLAGS_server.c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
-            LOG(ERROR) << "Fail to initialize channel";
-            return;
-        }
-
-        exec::EchoService_Stub stub(&channel);
-
+        exec::EchoService_Stub stub(channel);
         exec::Response* response = new exec::Response();
-        brpc::Controller* cntl = new brpc::Controller();
-        
         exec::Request request;
-
-
-        brpc::StreamId stream;
-        if (!streamipmap[serverlist[i]]) {
-            brpc::StreamOptions stream_options;
-            static StreamReceiver _receiver;
-            stream_options.handler = &_receiver;
-            stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-            if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-                LOG(ERROR) << "Fail to create stream";
-                return;
-            }
-            streamipmap[serverlist[i]] = stream;
-        }else {
-            stream = streamipmap[serverlist[i]];
-        }
 
         request.set_message(filename);
 
@@ -259,27 +162,57 @@ void GetFile(std::string filename, std::string serverlist[], size_t servernum) {
 
 void JudeCommandType(int32_t commandtype, std::string serverstring, std::string commandname) {
     std::string serverlist[FLAGS_default_buffer_size];
-    size_t i = 0;
+    size_t servernum = 0;
     while (true) {
         std::string::size_type nPosB = serverstring.find(" ");
         if (nPosB != std::string::npos) {
-            serverlist[i++] = serverstring.substr(0, nPosB);
+            serverlist[servernum++] = serverstring.substr(0, nPosB);
             serverstring = serverstring.substr(nPosB + 1);
         }else {
-            serverlist[i++] = serverstring;
+            serverlist[servernum++] = serverstring;
             break;
         }
     }
-    switch(commandtype) {
-        case EXEC_COMMAND:
-            ExecCommand(commandname, serverlist, i);
-            break;
-        case EXEC_POSTFILE:
-            PostFile(commandname, serverlist, i);
-            break;
-        case EXEC_GETFILE:
-            GetFile(commandname, serverlist, i);
-            break;
+
+    brpc::ChannelOptions options;
+    options.protocol = FLAGS_protocol;
+    options.connection_type = FLAGS_connection_type;
+    options.timeout_ms = FLAGS_timeout_ms/*milliseconds*/;
+    options.max_retry = FLAGS_max_retry;
+
+
+    for (size_t i = 0; i < servernum; i++) {
+        brpc::Channel channel;
+        if (channel.Init(serverlist[i].c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
+            LOG(ERROR) << "Fail to initialize channel";
+            return;
+        }
+        
+
+        brpc::Controller* cntl = new brpc::Controller();
+        
+        exec::Request request;
+        brpc::StreamId stream;
+        brpc::StreamOptions stream_options;
+        static StreamReceiver _receiver;
+        stream_options.handler = &_receiver;
+        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+        if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+            LOG(ERROR) << "Fail to create stream";
+            return;
+        }
+
+        switch(commandtype) {
+            case EXEC_COMMAND:
+                ExecCommand(commandname, stream, &channel);
+                break;
+            case EXEC_POSTFILE:
+                PostFile(commandname, stream, &channel);
+                break;
+            case EXEC_GETFILE:
+                GetFile(commandname, stream, &channel);
+                break;
+        }
     }
 }
 
