@@ -100,10 +100,6 @@ void HandleResponse(
         LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
         return;
     }
-    /*LOG(INFO) << cntl->remote_side()
-        << ": " << response->message() << " (attached="
-        << cntl->response_attachment() << ")"
-        << " latency=" << cntl->latency_us() << "us";*/
 
     LOG(INFO) << "成功连接到:" << cntl->remote_side();
 }

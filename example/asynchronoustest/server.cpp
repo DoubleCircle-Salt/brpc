@@ -207,8 +207,6 @@ int main(int argc, char* argv[]) {
         LOG(ERROR) << "Fail to start EchoServer";
         return -1;
     }
-
-    // Wait until Ctrl-C is pressed, then Stop() and Join() the server.
     server.RunUntilAskedToQuit();
     return 0;
 }
