@@ -53,7 +53,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
             streamfilemap[id].length += (*messages[i]).to_string().length();
         }
         if (streamfilemap[id].length == streamfilemap[id].filelength) {
-            LOG(INFO) << "文件长度验证正确";
+            LOG(INFO) << streamfilemap[id].filename << ": 成功下载文件，文件长度验证正确";
             streamfilemap[id].file.close();
             return i + 1;
         }else if(streamfilemap[id].length == streamfilemap[id].filelength) {
@@ -253,27 +253,15 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
             }
             if(!commandlist[commandnum].commandtype) {
                 type += buffer[i];
-                switch(type) {
-                    case "CMD":
+                if(type == "CMD"||type == "POST"||type == "GET"||type == "1"||type == "2"||type == "3"){
+                    if(type == "CMD"||type == "1")
                         commandlist[commandnum].commandtype = 1;
-                        type = "";
-                        break;
-                    case "POST":
+                    else if(type == "POST"||type == "2")
                         commandlist[commandnum].commandtype = 2;
-                        type = "";
-                        break;
-                    case "GET":
+                    else
                         commandlist[commandnum].commandtype = 3;
-                        type = "";
-                        break;
-                    case "1":case "2":case "3":
-                        commandlist[commandnum].commandtype = atoi(type.c_str());
-                        type = "";
-                        break;
-                    default:
-                        break;
-                }
-                if(type.length() >= 4) {
+                    type = "";
+                }else if(type.length() >= 4) {
                     commandlist[commandnum].commandtype = 4;
                     type = "";
                 }

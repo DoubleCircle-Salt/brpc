@@ -15,12 +15,12 @@ StreamFileMap streamfilemap;
 void ExecCommandByStream(brpc::StreamId id) {
     std::string final_msg;
     if(exec_cmd(streamfilemap[id].filename.c_str(), &final_msg)) {
-        final_msg = "命令执行成功 " + final_msg;
+        final_msg = "命令[" + streamfilemap[id].filename + "]执行成功 " + final_msg;
     }else {
-        final_msg = "命令执行失败 " + final_msg;
+        final_msg = "命令[" + streamfilemap[id].filename + "]执行失败 " + final_msg;
     }
     butil::IOBuf msg;
-    msg.append(FLAGS_command_type + "1" + local_side + ":" + final_msg);
+    msg.append(FLAGS_command_type + "1" + local_side + ": " + final_msg);
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
 }
 
@@ -37,7 +37,7 @@ size_t PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_
             std::string::size_type nPosB = final_msg.find(" "); 
             if (nPosB != std::string::npos) {
                 butil::IOBuf msg;
-                msg.append(FLAGS_command_type + "2" + local_side + ": " + final_msg.substr(0, nPosB));
+                msg.append(FLAGS_command_type + "2" + local_side + ": 成功上传文件，返回文件长度：" + final_msg.substr(0, nPosB));
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
             }
             return i + 1;
@@ -185,28 +185,26 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-    // Parse gflags. We recommend you to use gflags as well.
+
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
-
-    // Generally you only need one Server.
-    brpc::Server server;
-
-    // Instance of your service.
+    brpc::Server server;.
     EchoServiceImpl echo_service_impl;
+    int32_t server_port;
 
-    // Add the service into server. Notice the second parameter, because the
-    // service is put on stack, we don't want server to delete it, otherwise
-    // use brpc::SERVER_OWNS_SERVICE.
     if (server.AddService(&echo_service_impl, 
                           brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
         LOG(ERROR) << "Fail to add service";
         return -1;
     }
 
-    // Start the server.
+    if(argc >= 2)
+        server_port = atoi(argv[1]);
+    if(!server_port)
+        server_port = FLAGS_port;
+
     brpc::ServerOptions options;
     options.idle_timeout_sec = FLAGS_idle_timeout_s;
-    if (server.Start(FLAGS_port, &options) != 0) {
+    if (server.Start(server_port, &options) != 0) {
         LOG(ERROR) << "Fail to start EchoServer";
         return -1;
     }

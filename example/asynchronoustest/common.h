@@ -46,7 +46,7 @@ bool exec_cmd(const char *command, std::string *final_msg)
     {
         snprintf(buffer, sizeof(buffer), "popen failed. %s, with errno %d.\n", strerror(errno), errno);
         *final_msg = buffer;
-        LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
+        //LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
         return false;
     }
 
@@ -80,7 +80,7 @@ bool exec_cmd(const char *command, std::string *final_msg)
             snprintf(buffer, sizeof(buffer), "Close file failed. %s, with errno %d.\n", strerror(errno), errno);
             *final_msg += buffer;
         }
-        LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
+        //LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
         return false;
     }
 
@@ -92,14 +92,13 @@ bool exec_cmd(const char *command, std::string *final_msg)
     if (status_child == 0)
     {
         // child process exits SUCCESS.
-        LOG(INFO) << "命令[" << command << "]执行成功.";
-
+        //LOG(INFO) << "命令[" << command << "]执行成功.";
         return true;
     }
     else
     {
         // child process exits FAILED.
-        LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
+        //LOG(INFO) << "命令[" << command << "]执行发生错误，err: " << *final_msg;
         return false;
     }
 }
