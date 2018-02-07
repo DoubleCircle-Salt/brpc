@@ -9,7 +9,7 @@ DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 10000, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
 
-StreamIpMap streamipmap;
+StreamFileMap streamfilemap;
 
 size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     if(!streamfilemap[id].file.is_open()) {
@@ -25,15 +25,25 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
                 if(nPosSize != std::string::npos) {
                     streamfilemap[id].filename = streamstring.substr(0, nPosSize);
                     streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
+
+
+                    std::string::size_type nPosDir = streamfilemap[id].filename.find("/");
+                    if(nPosDir != std::string::npos) {
+                        std::string cmd = "mkdir " + streamfilemap[id].filename.substr(0, nPosDir);
+                        std::string fmsg;
+                        exec_cmd(cmd.c_str(), &fmsg);
+                    }else {
+                        return 0;
+                    }
                     streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
                 }else {
-                    return -1;
+                    return 0;
                 }
             }else {
-                return -1;
+                return 0;
             }
         }else {
-            return -1;
+            return 0;
         }
     }
     //写文件
@@ -49,7 +59,8 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
         }else if(streamfilemap[id].length == streamfilemap[id].filelength) {
             return 0;
         }
-    }      
+    }
+    return i; 
 }
 
 class StreamReceiver : public brpc::StreamInputHandler {
@@ -76,7 +87,6 @@ public:
         streamfilemap[id].file.close();
     }
 private:
-    StreamFileMap streamfilemap;
 };
 
 void HandleResponse(
@@ -259,15 +269,30 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
     return commandnum;
 }
 
-void ShowInfo(std::string serverlist[], size_t servernum, STRUCT_COMMAND commandlist[], size_t commandnum) {
+bool ShowInfo(std::string serverlist[], size_t servernum, STRUCT_COMMAND commandlist[], size_t commandnum) {
     LOG(INFO) << "ServerList:";
     for(size_t i = 0; i < servernum; i++) {
         LOG(INFO) << serverlist[i];
     }
     LOG(INFO) << "CommandList:";
     for(size_t i = 0; i < commandnum; i++) {
-        LOG(INFO) << commandlist[i].commandtype << " " << commandlist[i].commandname;
+        std::string commandname;
+        switch(commandlist[i].commandtype) {
+            case EXEC_COMMAND:
+                commandname = "CMD ";
+                break;
+            case EXEC_POSTFILE:
+                commandname = "POST";
+                break;
+            case EXEC_GETFILE:
+                commandname = "GET ";
+                break;
+            default:
+                return false;
+        }
+        LOG(INFO) << commandname << "  " << commandlist[i].commandname;
     }
+    return true;
 }
 
 int main(int argc, char* argv[]) {       
@@ -281,7 +306,11 @@ int main(int argc, char* argv[]) {
         LOG(INFO) << "Failed To Get the CommandList or ServerList!";
         return 0;
     }
-    ShowInfo(serverlist, servernum, commandlist, commandnum);
+    if(!ShowInfo(serverlist, servernum, commandlist, commandnum)) {
+        LOG(INFO) << "Failed To Check the CommandList or ServerList!";
+        return 0;
+    }
+
     SendCommandToServer(serverlist, servernum, commandlist, commandnum);
 
     sleep(100);

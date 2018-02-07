@@ -57,7 +57,7 @@ void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t s
     filelengthstream << filelength;
 
     butil::IOBuf msg;
-    msg.append(FLAGS_command_type + "3" + FLAGS_file_name + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
+    msg.append(FLAGS_command_type + "3" + local_side + "/" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
     while(!streamfilemap[id].file.eof()) {
         msg.clear();

@@ -30,7 +30,6 @@ typedef struct _STRUCT_COMMAND{
 }STRUCT_COMMAND;
 
 typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFileMap;
-typedef std::map<std::string, brpc::StreamId> StreamIpMap;
 
 bool exec_cmd(const char *command, std::string *final_msg)
 {
