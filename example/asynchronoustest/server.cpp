@@ -11,6 +11,7 @@ std::string local_side;
 StreamFileMap streamfilemap;
 
 
+
 void ExecCommandByStream(brpc::StreamId id) {
     std::string final_msg;
     if(exec_cmd(streamfilemap[id].filename.c_str(), &final_msg)) {
@@ -23,23 +24,28 @@ void ExecCommandByStream(brpc::StreamId id) {
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
 }
 
-void PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
+size_t PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     for (; i < size; i++) {
         streamfilemap[id].file.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
         streamfilemap[id].length += (*messages[i]).to_string().length();
-    }
-    if (streamfilemap[id].length == streamfilemap[id].filelength) {
-        streamfilemap[id].file.close();
-        std::string command = "ls -l " + streamfilemap[id].filename + " | awk '{print $5}'";
-        std::string final_msg;
-        exec_cmd(command.c_str(), &final_msg);
-        std::string::size_type nPosB = final_msg.find(" "); 
-        if (nPosB != std::string::npos) {
-            butil::IOBuf msg;
-            msg.append(FLAGS_command_type + "2" + local_side + ": " + final_msg.substr(0, nPosB));
-            CHECK_EQ(0, brpc::StreamWrite(id, msg));
+
+        if(streamfilemap[id].length == streamfilemap[id].filelength) {
+            streamfilemap[id].file.close();
+            std::string command = "ls -l " + streamfilemap[id].filename + " | awk '{print $5}'";
+            std::string final_msg;
+            exec_cmd(command.c_str(), &final_msg);
+            std::string::size_type nPosB = final_msg.find(" "); 
+            if (nPosB != std::string::npos) {
+                butil::IOBuf msg;
+                msg.append(FLAGS_command_type + "2" + local_side + ": " + final_msg.substr(0, nPosB));
+                CHECK_EQ(0, brpc::StreamWrite(id, msg));
+            }
+            return i + 1;
+        }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
+            return 0;
         }
     }
+    return i; 
 }
 
 void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
@@ -63,66 +69,75 @@ void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t s
     streamfilemap[id].file.close();
 }
 
+size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
+    if(!streamfilemap[id].file.is_open()) {
+        //获取命令类型
+        std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
+        if (nPosType != std::string::npos){
+            std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
+            //获取命令内容
+            std::string::size_type nPosName = streamstring.find(FLAGS_file_name);
+
+            if(nPosName != std::string::npos) {
+                streamfilemap[id].commandtype = atoi(streamstring.substr(0, nPosName).c_str());
+                streamstring = streamstring.substr(nPosName + FLAGS_file_name.length());
+                //下载文件与执行命令不包含文件长度
+                if(streamfilemap[id].commandtype == EXEC_GETFILE||streamfilemap[id].commandtype == EXEC_COMMAND){
+                    streamfilemap[id].filename = streamstring;
+                    streamfilemap[id].filelength = -1;
+                }else if(streamfilemap[id].commandtype == EXEC_POSTFILE){
+                    std::string::size_type nPosSize = streamstring.find(" ");
+                    if(nPosSize != std::string::npos) {
+                        streamfilemap[id].filename = streamstring.substr(0, nPosSize);
+                        streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
+                    }else {
+                        return 0;
+                    }
+                }else {
+                    return 0;
+                }
+            }else {
+                return 0;
+            }
+        }else {
+            return 0;
+        }
+
+        if(streamfilemap[id].commandtype == EXEC_POSTFILE) {
+            streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
+        }
+        else if(streamfilemap[id].commandtype == EXEC_GETFILE) {
+            streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
+        }
+    }
+
+    switch(streamfilemap[id].commandtype) {
+        case EXEC_COMMAND:
+            ExecCommandByStream(id);
+            break;
+        case EXEC_POSTFILE:
+            i = PostFileByStream(id, messages, size, i);                
+            break;
+        case EXEC_GETFILE:
+            GetFileByStream(id, messages, size, i);
+            break;
+        default:
+            break;
+    }
+    return i;    
+}
+
 class StreamReceiver : public brpc::StreamInputHandler {
 public:
     virtual int on_received_messages(brpc::StreamId id, 
                                      butil::IOBuf *const messages[], 
                                      size_t size) {
-        size_t i = 0;
-        if(!streamfilemap[id].file.is_open()) {
-            //获取命令类型
-            std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
-            if (nPosType != std::string::npos){
-                std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
-                //获取命令内容
-                std::string::size_type nPosName = streamstring.find(FLAGS_file_name);
-
-                if(nPosName != std::string::npos) {
-                    streamfilemap[id].commandtype = atoi(streamstring.substr(0, nPosName).c_str());
-                    streamstring = streamstring.substr(nPosName + FLAGS_file_name.length());
-                    //下载文件与执行命令不包含文件长度
-                    if(streamfilemap[id].commandtype == EXEC_GETFILE||streamfilemap[id].commandtype == EXEC_COMMAND){
-                        streamfilemap[id].filename = streamstring;
-                        streamfilemap[id].filelength = -1;
-                    }else if(streamfilemap[id].commandtype == EXEC_POSTFILE){
-                        std::string::size_type nPosSize = streamstring.find(" ");
-                        if(nPosSize != std::string::npos) {
-                            streamfilemap[id].filename = streamstring.substr(0, nPosSize);
-                            streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
-                        }else {
-                            return -1;
-                        }
-                    }else {
-                        return -1;
-                    }
-                }else {
-                    return -1;
-                }
-            }else {
+        for(size_t i = 0; i < size;) {
+            i = JudgeCommandType(id, messages, size, i);
+            if(i == 0) {
                 return -1;
             }
-
-            if(streamfilemap[id].commandtype == EXEC_POSTFILE) {
-                streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
-            }
-            else if(streamfilemap[id].commandtype == EXEC_GETFILE) {
-                streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
-            }
         }
-
-        switch(streamfilemap[id].commandtype) {
-            case EXEC_COMMAND:
-                ExecCommandByStream(id);
-                break;
-            case EXEC_POSTFILE:
-                PostFileByStream(id, messages, size, i);                
-                break;
-            case EXEC_GETFILE:
-                GetFileByStream(id, messages, size, i);
-                break;
-            default:
-                break;
-        }        
         return 0;
     }
     virtual void on_idle_timeout(brpc::StreamId id) {
