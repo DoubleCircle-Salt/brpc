@@ -236,6 +236,7 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
         return 0;
     }
     size_t commandnum = 0;
+    std::string type = "";
     while(!fin.eof()) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
         int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
@@ -251,11 +252,31 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
                 }                       
             }
             if(!commandlist[commandnum].commandtype) {
-                std::string type = "";
                 type += buffer[i];
-                commandlist[commandnum].commandtype = atoi(type.c_str());
-                if(commandlist[commandnum].commandtype != EXEC_COMMAND && commandlist[commandnum].commandtype != EXEC_POSTFILE && commandlist[commandnum].commandtype != EXEC_GETFILE)
-                    return 0;
+                switch(type) {
+                    case "CMD":
+                        commandlist[commandnum].commandtype = 1;
+                        type = "";
+                        break;
+                    case "POST":
+                        commandlist[commandnum].commandtype = 2;
+                        type = "";
+                        break;
+                    case "GET":
+                        commandlist[commandnum].commandtype = 3;
+                        type = "";
+                        break;
+                    case "1":case "2":case "3":
+                        commandlist[commandnum].commandtype = atoi(type.c_str());
+                        type = "";
+                        break;
+                    default:
+                        break;
+                }
+                if(type.length() >= 4) {
+                    commandlist[commandnum].commandtype = 4;
+                    type = "";
+                }
             }else {
                 commandlist[commandnum].commandname += buffer[i];
             }
