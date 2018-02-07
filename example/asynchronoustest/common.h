@@ -86,7 +86,7 @@ bool exec_cmd(const char *command, std::string *final_msg)
 
     int status_child = WEXITSTATUS(rc);
     // the success message is here.
-    *final_msg += child_result;
+    //*final_msg += child_result;
     //snprintf(buffer, sizeof(buffer), "[%s]: command exit status [%d] and child process exit status [%d].\r\n", command, rc, status_child);
     *final_msg += buffer;
     if (status_child == 0)

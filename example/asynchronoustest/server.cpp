@@ -10,8 +10,6 @@ DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
 std::string local_side;
 StreamFileMap streamfilemap;
 
-
-
 void ExecCommandByStream(brpc::StreamId id) {
     std::string final_msg;
     if(exec_cmd(streamfilemap[id].filename.c_str(), &final_msg)) {
@@ -90,6 +88,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
                     if(nPosSize != std::string::npos) {
                         streamfilemap[id].filename = streamstring.substr(0, nPosSize);
                         streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
+                        streamfilemap[id].length = 0;
                     }else {
                         return 0;
                     }
@@ -187,9 +186,9 @@ private:
 int main(int argc, char* argv[]) {
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
-    brpc::Server server;.
+    brpc::Server server;
     EchoServiceImpl echo_service_impl;
-    int32_t server_port;
+    int32_t server_port = 0;
 
     if (server.AddService(&echo_service_impl, 
                           brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {

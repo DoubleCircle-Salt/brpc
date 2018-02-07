@@ -56,7 +56,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
             LOG(INFO) << streamfilemap[id].filename << ": 成功下载文件，文件长度验证正确";
             streamfilemap[id].file.close();
             return i + 1;
-        }else if(streamfilemap[id].length == streamfilemap[id].filelength) {
+        }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
             return 0;
         }
     }
@@ -141,6 +141,7 @@ void PostFile(std::string filename, brpc::StreamId stream) {
         msg.append(buffer, length);
         CHECK_EQ(0, brpc::StreamWrite(stream, msg));  
     }
+    fin.close();
 }
 
 void GetFile(std::string filename, brpc::StreamId stream) {     
