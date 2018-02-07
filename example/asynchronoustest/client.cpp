@@ -126,7 +126,7 @@ void GetFile(std::string filename, brpc::StreamId stream) {
     CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 }
 
-void JudeCommandType(std::string serverlist[], size_t servernum, std::string commandlist[], size_t commandnum) {
+void JudeCommandType(std::string serverlist[], size_t servernum, STRUCT_COMMAND commandlist[], size_t commandnum) {
 
     brpc::ChannelOptions options;
     options.protocol = FLAGS_protocol;
@@ -139,7 +139,7 @@ void JudeCommandType(std::string serverlist[], size_t servernum, std::string com
         if (channel.Init(serverlist[i].c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
             LOG(ERROR) << "Fail to initialize channel";
             return;
-        }       
+        }
 
         brpc::Controller* cntl = new brpc::Controller();        
         brpc::StreamId stream;
@@ -161,30 +161,35 @@ void JudeCommandType(std::string serverlist[], size_t servernum, std::string com
             &HandleResponse, cntl, response);
         stub.Echo(cntl, &request, response, done);    
 
-        switch(commandtype) {
-            case EXEC_COMMAND:
-                ExecCommand(commandname, stream);
-                break;
-            case EXEC_POSTFILE:
-                PostFile(commandname, stream);
-                break;
-            case EXEC_GETFILE:
-                GetFile(commandname, stream);
-                break;
+        for (size_t j = 0; j < commandnum; j++) {
+            switch(commandlist[j].commandtype) {
+                case EXEC_COMMAND:
+                    ExecCommand(commandlist[j].commandname, stream);
+                    break;
+                case EXEC_POSTFILE:
+                    PostFile(commandlist[j].commandname, stream);
+                    break;
+                case EXEC_GETFILE:
+                    GetFile(commandlist[j].commandname, stream);
+                    break;
+            }
         }
     }
 }
 
-size_t GetServerlistFromFile(std:string filename, std::string serverlist[]) {
+size_t GetServerlistFromFile(std::string filename, std::string serverlist[]) {
 
-    std::fstream file;
-    file.open(filename, std::ios::out);
+    std::ifstream fin(filename);
+    if (!fin) {
+        LOG(INFO) << "Failed To Open the Ip Config File!";
+        return 0;
+    }
     size_t servernum = 0;
-    while(!file.eof()) {
+    while(!fin.eof()) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
-        file.read(buffer, FLAGS_default_buffer_size);
-        for(size_t i = 0; i < length; i++) {
-            if(buffer[i] == " "||buffer[i] == "\n"||buffer[i] == "\t") {
+        int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
+        for(int32_t i = 0; i < length; i++) {
+            if(buffer[i] == ' '||buffer[i] == '\n'||buffer[i] == '\t') {
                 if (serverlist[servernum] != "") {
                     servernum++;
                 }
@@ -193,39 +198,46 @@ size_t GetServerlistFromFile(std:string filename, std::string serverlist[]) {
             serverlist[servernum] += buffer[i];
         }
     }
-    file.close();
+    fin.close();
     if (serverlist[servernum] != "") 
         servernum ++;
 
     return servernum;    
 }
 
-size_t GetCommandlistFromFile(std:string filename, STRUCT_COMMAND commandlist) {
-    std::fstream file;
-    file.open(filename, std::ios::out);
+size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]) {
+    std::ifstream fin(filename);
+    if (!fin) {
+        LOG(INFO) << "Failed To Open the Command Config File!";
+        return 0;
+    }
     size_t commandnum = 0;
-    while(!file.eof()) {
+    while(!fin.eof()) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
-        file.read(buffer, FLAGS_default_buffer_size);
-        for(size_t i = 0; i < length; i++) {
-            if(buffer[i] == "\n") {
+        int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
+        for(int32_t i = 0; i < length; i++) {
+            if(buffer[i] == '\n') {
                 if (commandlist[commandnum].commandname != "") {
                     commandnum++;
                 }
                 continue;
-            }else if(buffer[i] == " "||buffer[i] == "\t"){
+            }else if(buffer[i] == ' '||buffer[i] == '\t'){
                 if (commandlist[commandnum].commandname == "") {
                     continue;
                 }                       
             }
             if(!commandlist[commandnum].commandtype) {
-                commandlist[commandnum].commandtype = atoi(buffer[i]);
+                std::string type = "";
+                type += buffer[i];
+                commandlist[commandnum].commandtype = atoi(type.c_str());
+                if(commandlist[commandnum].commandtype != EXEC_COMMAND && commandlist[commandnum].commandtype != EXEC_POSTFILE && commandlist[commandnum].commandtype != EXEC_GETFILE)
+                    return 0;
             }else {
                 commandlist[commandnum].commandname += buffer[i];
             }
         }
     }
-    file.close();
+    fin.close();
 
     if (commandlist[commandnum].commandname != "") 
         commandnum ++;
@@ -239,8 +251,11 @@ int main(int argc, char* argv[]) {
 
     std::string serverlist[FLAGS_default_buffer_size];
     STRUCT_COMMAND commandlist[FLAGS_default_buffer_size];
-    size_t servernum = GetServerlistFromFile("server.conf", serverlist);
-    size_t commandnum = GetCommandlistFromFile("command.conf", commandlist);
+    size_t servernum, commandnum;
+    if(!(servernum = GetServerlistFromFile("server.conf", serverlist))||!(commandnum = GetCommandlistFromFile("command.conf", commandlist))) {
+        LOG(INFO) << "Failed To Get the CommandList or ServerList!";
+        return 0;
+    }
 
     JudeCommandType(serverlist, servernum, commandlist, commandnum);
 
