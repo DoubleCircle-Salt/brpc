@@ -22,7 +22,7 @@ public:
             if (nPosType != std::string::npos){
                 std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
                 streamfilemap[id].commandtype = atoi(streamstring.substr(0, 1).c_str());                
-                streamstring = streamstring.substr(2);
+                streamstring = streamstring.substr(1);
                 if (streamfilemap[id].commandtype == EXEC_POSTFILE||streamfilemap[id].commandtype == EXEC_COMMAND) {
                     LOG(INFO) << streamstring;
                 }else if (streamfilemap[id].commandtype == EXEC_GETFILE) {
@@ -126,7 +126,7 @@ void GetFile(std::string filename, brpc::StreamId stream) {
     CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 }
 
-void JudeCommandType(std::string serverlist[], size_t servernum, STRUCT_COMMAND commandlist[], size_t commandnum) {
+void SendCommandToServer(std::string serverlist[], size_t servernum, STRUCT_COMMAND commandlist[], size_t commandnum) {
 
     brpc::ChannelOptions options;
     options.protocol = FLAGS_protocol;
@@ -245,6 +245,17 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
     return commandnum;
 }
 
+void ShowInfo(std::string serverlist[], size_t servernum, STRUCT_COMMAND commandlist[], size_t commandnum) {
+    LOG(INFO) << "ServerList:";
+    for(size_t i = 0; i < servernum; i++) {
+        LOG(INFO) << serverlist[i];
+    }
+    LOG(INFO) << "CommandList:";
+    for(size_t i = 0; i < commandnum; i++) {
+        LOG(INFO) << commandlist[i].commandtype << " " << commandlist[i].commandname;
+    }
+}
+
 int main(int argc, char* argv[]) {       
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
@@ -256,8 +267,8 @@ int main(int argc, char* argv[]) {
         LOG(INFO) << "Failed To Get the CommandList or ServerList!";
         return 0;
     }
-
-    JudeCommandType(serverlist, servernum, commandlist, commandnum);
+    ShowInfo(serverlist, servernum, commandlist, commandnum);
+    SendCommandToServer(serverlist, servernum, commandlist, commandnum);
 
     sleep(100);
     LOG(INFO) << "EchoClient is going to quit";

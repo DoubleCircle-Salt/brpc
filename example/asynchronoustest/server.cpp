@@ -10,9 +10,14 @@ DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
 std::string local_side;
 StreamFileMap streamfilemap;
 
+
 void ExecCommandByStream(brpc::StreamId id) {
     std::string final_msg;
-    exec_cmd(streamfilemap[id].filename.c_str(), &final_msg);
+    if(exec_cmd(streamfilemap[id].filename.c_str(), &final_msg)) {
+        final_msg = "命令执行成功 " + final_msg;
+    }else {
+        final_msg = "命令执行失败 " + final_msg;
+    }
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "1" + local_side + ":" + final_msg);
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
