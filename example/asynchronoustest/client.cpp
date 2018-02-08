@@ -36,6 +36,11 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
                         return 0;
                     }
                     streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
+                    if(streamfilemap[id].filelength == 0) {
+                        LOG(INFO) << streamfilemap[id].filename << ": 成功下载文件，文件长度验证正确";
+                        streamfilemap[id].file.close();
+                        return i;
+                    }
                 }else {
                     return 0;
                 }
@@ -129,6 +134,11 @@ void PostFile(std::string filename, brpc::StreamId stream) {
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "2" + FLAGS_file_name + GetRealname(filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(stream, msg));
+
+    if(filelength == 0) {
+        fin.close();
+        return;
+    }
     while(!fin.eof()) {
         msg.clear();
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
@@ -336,7 +346,7 @@ int main(int argc, char* argv[]) {
 
     while(true)
         sleep(5);
-    
+
     LOG(INFO) << "EchoClient is going to quit";
     return 0;
 }

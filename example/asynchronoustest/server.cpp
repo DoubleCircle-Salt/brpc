@@ -57,6 +57,11 @@ void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t s
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "3" + local_side + "/" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
+
+    if(filelength == 0) {
+        streamfilemap[id].file.close();
+        return;
+    }
     while(!streamfilemap[id].file.eof()) {
         msg.clear();
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
@@ -104,6 +109,14 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
 
         if(streamfilemap[id].commandtype == EXEC_POSTFILE) {
             streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
+            //文件长度为0，直接返回
+            if(streamfilemap[id].filelength == 0) {
+                streamfilemap[id].file.close();
+                butil::IOBuf msg;
+                msg.append(FLAGS_command_type + "2" + local_side + ": 成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：0");
+                CHECK_EQ(0, brpc::StreamWrite(id, msg));
+                return i;
+            }
         }
         else if(streamfilemap[id].commandtype == EXEC_GETFILE) {
             streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
