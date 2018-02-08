@@ -56,14 +56,15 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
         for (; i < size; i++) {
             streamfilemap[id].file.write((*messages[i]).to_string().c_str(), (*messages[i]).to_string().length());
             streamfilemap[id].length += (*messages[i]).to_string().length();
-        }
-        if (streamfilemap[id].length == streamfilemap[id].filelength) {
-            LOG(INFO) << streamfilemap[id].filename << ": 成功下载文件，文件长度验证正确";
-            streamfilemap[id].file.close();
-            return i + 1;
-        }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
-            return 0;
-        }
+            if (streamfilemap[id].length == streamfilemap[id].filelength) {
+                LOG(INFO) << streamfilemap[id].filename << ": 成功下载文件，文件长度验证正确";
+                streamfilemap[id].file.close();
+                return i + 1;
+            }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
+                LOG(INFO) << streamfilemap[id].filename << ": 读取下载文件时发生错误";
+                return 0;
+            }
+        }        
     }
     return i; 
 }
