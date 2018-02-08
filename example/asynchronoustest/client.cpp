@@ -206,17 +206,25 @@ size_t GetServerlistFromFile(std::string filename, std::string serverlist[]) {
         return 0;
     }
     size_t servernum = 0;
+    bool newline = true;
     while(!fin.eof()) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
         int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
         for(int32_t i = 0; i < length; i++) {
-            if(buffer[i] == ' '||buffer[i] == '\n'||buffer[i] == '\t') {
-                if (serverlist[servernum] != "") {
-                    servernum++;
-                }
-                continue;
+            if(buffer[i] == '#') {
+                newline = false;
+            }else if(buffer[i] == '\n') {
+                newline = true;
             }
-            serverlist[servernum] += buffer[i];
+            if(newline) {
+                if(buffer[i] == ' '||buffer[i] == '\n'||buffer[i] == '\t') {
+                    if (serverlist[servernum] != "") {
+                        servernum++;
+                    }
+                    continue;
+                }
+                serverlist[servernum] += buffer[i];
+            }
         }
     }
     fin.close();
@@ -234,36 +242,45 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
     }
     size_t commandnum = 0;
     std::string type = "";
+    bool newline = true;
     while(!fin.eof()) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
         int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
         for(int32_t i = 0; i < length; i++) {
-            if(buffer[i] == '\n') {
-                if (commandlist[commandnum].commandname != "") {
-                    commandnum++;
-                }
-                continue;
-            }else if(buffer[i] == ' '||buffer[i] == '\t'){
-                if (commandlist[commandnum].commandname == "") {
-                    continue;
-                }                       
+            if(buffer[i] == '#') {
+                newline = false;
+            }else if(buffer[i] == '\n') {
+                newline = true;
             }
-            if(!commandlist[commandnum].commandtype) {
-                type += buffer[i];
-                if(type == "CMD"||type == "POST"||type == "GET"||type == "1"||type == "2"||type == "3"){
-                    if(type == "CMD"||type == "1")
-                        commandlist[commandnum].commandtype = 1;
-                    else if(type == "POST"||type == "2")
-                        commandlist[commandnum].commandtype = 2;
-                    else
-                        commandlist[commandnum].commandtype = 3;
-                    type = "";
-                }else if(type.length() >= 4) {
-                    commandlist[commandnum].commandtype = 4;
-                    type = "";
+            if(newline) {
+                if(buffer[i] == '\n') {
+                    newline = true;
+                    if (commandlist[commandnum].commandname != "") {
+                        commandnum++;
+                    }
+                    continue;
+                }else if(buffer[i] == ' '||buffer[i] == '\t'){
+                    if (commandlist[commandnum].commandname == "") {
+                        continue;
+                    }                       
                 }
-            }else {
-                commandlist[commandnum].commandname += buffer[i];
+                if(!commandlist[commandnum].commandtype && newline) {
+                    type += buffer[i];
+                    if(type == "CMD"||type == "POST"||type == "GET"||type == "1"||type == "2"||type == "3") {
+                        if(type == "CMD"||type == "1")
+                            commandlist[commandnum].commandtype = 1;
+                        else if(type == "POST"||type == "2")
+                            commandlist[commandnum].commandtype = 2;
+                        else
+                            commandlist[commandnum].commandtype = 3;
+                        type = "";
+                    }else if(type.length() >= 4) {
+                        commandlist[commandnum].commandtype = 4;
+                        type = "";
+                    }
+                }else {
+                    commandlist[commandnum].commandname += buffer[i];
+                }
             }
         }
     }
