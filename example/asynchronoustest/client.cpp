@@ -8,6 +8,8 @@ DEFINE_string(server, "0.0.0.0:8003", "IP Address of server");
 DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 10000, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
+DEFINE_string(server_config, "server.conf", "");
+DEFINE_string(command_config, "command.conf", "");
 
 StreamFileMap streamfilemap;
 
@@ -354,7 +356,7 @@ int main(int argc, char* argv[]) {
     std::string serverlist[FLAGS_default_buffer_size];
     STRUCT_COMMAND commandlist[FLAGS_default_buffer_size];
     size_t servernum, commandnum;
-    if(!(servernum = GetServerlistFromFile("server.conf", serverlist))||!(commandnum = GetCommandlistFromFile("command.conf", commandlist))) {
+    if(!(servernum = GetServerlistFromFile(FLAGS_server_config, serverlist))||!(commandnum = GetCommandlistFromFile(FLAGS_command_config, commandlist))) {
         LOG(INFO) << "Failed To Get the CommandList or ServerList!";
         return 0;
     }

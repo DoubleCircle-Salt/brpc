@@ -216,7 +216,6 @@ int main(int argc, char* argv[]) {
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
     brpc::Server server;
     EchoServiceImpl echo_service_impl;
-    int32_t server_port = 0;
 
     if (server.AddService(&echo_service_impl, 
                           brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
@@ -224,14 +223,9 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    if(argc >= 2)
-        server_port = atoi(argv[1]);
-    if(!server_port)
-        server_port = FLAGS_port;
-
     brpc::ServerOptions options;
     options.idle_timeout_sec = FLAGS_idle_timeout_s;
-    if (server.Start(server_port, &options) != 0) {
+    if (server.Start(FLAGS_port, &options) != 0) {
         LOG(ERROR) << "Fail to start EchoServer";
         return -1;
     }
