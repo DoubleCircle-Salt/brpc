@@ -35,7 +35,7 @@ size_t PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_
             std::string::size_type nPosB = final_msg.find(" "); 
             if (nPosB != std::string::npos) {
                 butil::IOBuf msg;
-                msg.append(FLAGS_command_type + "2" + local_side + ": 成功上传文件，返回文件长度：" + final_msg.substr(0, nPosB));
+                msg.append(FLAGS_command_type + "2" + local_side + ": 成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：" + final_msg.substr(0, nPosB));
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
             }
             return i + 1;

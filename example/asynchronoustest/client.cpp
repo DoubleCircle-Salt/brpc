@@ -334,7 +334,9 @@ int main(int argc, char* argv[]) {
 
     SendCommandToServer(serverlist, servernum, commandlist, commandnum);
 
-    sleep(100);
+    while(true)
+        sleep(5);
+    
     LOG(INFO) << "EchoClient is going to quit";
     return 0;
 }
