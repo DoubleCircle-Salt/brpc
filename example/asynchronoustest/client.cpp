@@ -263,6 +263,7 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
     size_t commandnum = 0;
     std::string type = "";
     bool newline = true;
+    bool spaceflag = false;
     while(!fin.eof()) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
         int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
@@ -271,6 +272,7 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
                 newline = false;
             }else if(buffer[i] == '\n') {
                 newline = true;
+                spaceflag = false;
             }
             if(newline) {
                 if(buffer[i] == '\n') {
@@ -279,19 +281,27 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
                     }
                     continue;
                 }else if(buffer[i] == ' '||buffer[i] == '\t'){
-                    if (commandlist[commandnum].commandname == "") {
+                    if (commandlist[commandnum].commandname == "" || commandlist[commandnum].commandtype == EXEC_GETFILE) {
                         continue;
-                    }                       
+                    }else if(commandlist[commandnum].commandtype == EXEC_POSTFILE) {
+                        if(spaceflag) {
+                            continue;
+                        }else {
+                            if(buffer[i] == '\t')
+                                buffer[i] = ' ';
+                            spaceflag = true;
+                        }
+                    }        
                 }
                 if(!commandlist[commandnum].commandtype) {
                     type += buffer[i];
                     if(type == "CMD"||type == "POST"||type == "GET"||type == "1"||type == "2"||type == "3") {
                         if(type == "CMD"||type == "1")
-                            commandlist[commandnum].commandtype = 1;
+                            commandlist[commandnum].commandtype = EXEC_COMMAND;
                         else if(type == "POST"||type == "2")
-                            commandlist[commandnum].commandtype = 2;
+                            commandlist[commandnum].commandtype = EXEC_POSTFILE;
                         else
-                            commandlist[commandnum].commandtype = 3;
+                            commandlist[commandnum].commandtype = EXEC_GETFILE;
                         type = "";
                     }else if(type.length() >= 4) {
                         commandlist[commandnum].commandtype = 4;
