@@ -115,7 +115,7 @@ void PostFile(std::string filename, brpc::StreamId stream) {
 
     std::ifstream fin(filename);
     if (!fin) {
-        LOG(INFO) << "Failed To Open the File!";
+        LOG(INFO) << "上传文件失败，未能找到文件[" << filename << "]";
         return;
     }
 
@@ -129,7 +129,6 @@ void PostFile(std::string filename, brpc::StreamId stream) {
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "2" + FLAGS_file_name + GetRealname(filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(stream, msg));
-
     while(!fin.eof()) {
         msg.clear();
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
@@ -254,7 +253,6 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
             }
             if(newline) {
                 if(buffer[i] == '\n') {
-                    newline = true;
                     if (commandlist[commandnum].commandname != "") {
                         commandnum++;
                     }
@@ -264,7 +262,7 @@ size_t GetCommandlistFromFile(std::string filename, STRUCT_COMMAND commandlist[]
                         continue;
                     }                       
                 }
-                if(!commandlist[commandnum].commandtype && newline) {
+                if(!commandlist[commandnum].commandtype) {
                     type += buffer[i];
                     if(type == "CMD"||type == "POST"||type == "GET"||type == "1"||type == "2"||type == "3") {
                         if(type == "CMD"||type == "1")
