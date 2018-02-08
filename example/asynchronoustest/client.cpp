@@ -124,6 +124,14 @@ void PostFile(std::string filename, brpc::StreamId stream) {
         LOG(INFO) << "上传文件失败，未能找到文件[" << filename << "]";
         return;
     }
+    std::string filepath;
+    std::string::size_type nPosB = final_msg.find(" "); 
+    if(nPosB != std::string::npos) {
+        filepath = filename.substr(nPosB + 1);
+        if(filepath.substr(filepath.length() - 1) != "/")
+            filepath += "/";
+        filename = filename.substr(0, nPosB);
+    }
 
     fin.seekg(0, std::ios::end);
     int64_t filelength = fin.tellg();
@@ -133,7 +141,7 @@ void PostFile(std::string filename, brpc::StreamId stream) {
     filelengthstream << filelength;
 
     butil::IOBuf msg;
-    msg.append(FLAGS_command_type + "2" + FLAGS_file_name + GetRealname(filename) + " " + filelengthstream.str());
+    msg.append(FLAGS_command_type + "2" + FLAGS_file_name + filepath + GetRealname(filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 
     if(filelength == 0) {

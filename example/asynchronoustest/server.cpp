@@ -108,6 +108,14 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
         }
 
         if(streamfilemap[id].commandtype == EXEC_POSTFILE) {
+            if(streamfilemap[id].filename.find("/") != std::string::npos) {
+                std::string::size_type nPosPath = streamfilemap[id].filename.find(GetRealname(streamfilemap[id].filename));
+                if(nPosPath != std::string::npos) {
+                    std::string filepath = "mkdir -p " + streamfilemap[id].filename.substr(0, nPosPath);
+                    std::string fmsg;
+                    exec_cmd(filepath.c_str(), &fmsg);
+                }
+            }
             streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
             //文件长度为0，直接返回
             if(streamfilemap[id].filelength == 0) {
