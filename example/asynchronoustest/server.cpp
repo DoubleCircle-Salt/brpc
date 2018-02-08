@@ -107,6 +107,12 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
         }
         else if(streamfilemap[id].commandtype == EXEC_GETFILE) {
             streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
+            if(!streamfilemap[id].file) {
+                butil::IOBuf msg;
+                msg.append(FLAGS_command_type + "1" + local_side + ": 下载文件失败，未能找到文件");
+                CHECK_EQ(0, brpc::StreamWrite(id, msg));
+                return i;
+            }
         }
     }
 
