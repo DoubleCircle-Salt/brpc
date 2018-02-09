@@ -102,7 +102,9 @@ private:
 void ExecCommand(std::string command, brpc::StreamId stream) {
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command);
-    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
+    if(brpc::StreamWrite(stream, msg)){
+        LOG(INFO) << streamipmap[stream] << ": 发送指令失败，与服务端连接断开";
+    }
 }
 
 void PostFile(std::string filename, brpc::StreamId stream) {
@@ -131,7 +133,11 @@ void PostFile(std::string filename, brpc::StreamId stream) {
 
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "2" + FLAGS_file_name + filepath + GetRealname(filename) + " " + filelengthstream.str());
-    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
+    if(brpc::StreamWrite(stream, msg)){
+        LOG(INFO) << streamipmap[stream] << ": 上传文件失败，与服务端连接断开";
+        fin.close();
+        return;
+    }
 
     if(filelength == 0) {
         fin.close();
@@ -142,7 +148,10 @@ void PostFile(std::string filename, brpc::StreamId stream) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
         int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
         msg.append(buffer, length);
-        CHECK_EQ(0, brpc::StreamWrite(stream, msg));  
+        if(brpc::StreamWrite(id, msg)) {
+            LOG(INFO) << streamipmap[id] << ": 上传文件失败，与服务端连接断开";
+            break;
+        }
     }
     fin.close();
 }
@@ -151,7 +160,10 @@ void GetFile(std::string filename, brpc::StreamId stream) {
 
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "3" + FLAGS_file_name + filename);
-    CHECK_EQ(0, brpc::StreamWrite(stream, msg));
+    if(brpc::StreamWrite(stream, msg)){
+        LOG(INFO) << streamipmap[stream] << ": 发送指令失败，与服务端连接断开";
+    }
+
 }
 
 void *SendCommandToServer(void *arg) {

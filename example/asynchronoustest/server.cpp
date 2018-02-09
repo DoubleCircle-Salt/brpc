@@ -70,7 +70,9 @@ void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t s
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
         int32_t length = streamfilemap[id].file.read(buffer, FLAGS_default_buffer_size).gcount();
         msg.append(buffer, length);
-        CHECK_EQ(0, brpc::StreamWrite(id, msg));  
+        if(brpc::StreamWrite(id, msg)) {
+            break;
+        }
     }
     streamfilemap[id].file.close();
 }
