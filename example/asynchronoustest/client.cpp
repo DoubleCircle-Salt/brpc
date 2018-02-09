@@ -26,7 +26,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
                 std::string::size_type nPosSize = streamstring.find(" ");
                 if(nPosSize != std::string::npos) {
                     streamfilemap[id].filename = streamstring.substr(0, nPosSize);
-                    streamfilemap[id].filelength = atoi(streamstring.substr(nPosSize + 1).c_str());
+                    streamfilemap[id].filelength = atoi_64t(streamstring.substr(nPosSize + 1).c_str());
                     streamfilemap[id].length = 0;
                     
                     std::string::size_type nPosDir = streamfilemap[id].filename.find("/");

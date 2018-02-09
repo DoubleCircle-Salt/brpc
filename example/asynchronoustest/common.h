@@ -98,6 +98,13 @@ bool exec_cmd(const char *command, std::string *final_msg)
     }
 }
 
+int64_t atoi_64t(char numchar[]) {
+    int64_t num = 0;
+    for(size_t i = 0; i < strlen(numchar); i++)
+        num = num * 10 + numchar[i] - 48;
+    return num;
+}
+
 std::string GetRealname(std::string filename) {
     while (true) {
         std::string::size_type nPosB = filename.find("/");
