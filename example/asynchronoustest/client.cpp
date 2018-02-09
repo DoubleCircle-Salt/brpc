@@ -8,8 +8,12 @@ DEFINE_string(server, "0.0.0.0:8003", "IP Address of server");
 DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 10000, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
-DEFINE_string(server_config, "server.conf", "");
-DEFINE_string(command_config, "command.conf", "");
+DEFINE_string(ip_conf, "server.conf", "");
+DEFINE_string(cmd_conf, "command.conf", "");
+DEFINE_string(ip, "", "");
+DEFINE_string(cmd, "", "");
+DEFINE_string(postfile, "", "");
+DEFINE_string(getfile, "", "");
 
 StreamFileMap streamfilemap;
 
@@ -63,6 +67,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
                 streamfilemap[id].file.close();
                 return i + 1;
             }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
+                streamfilemap[id].file.close();
                 LOG(INFO) << streamfilemap[id].filename << ": 读取下载文件时发生错误";
                 return 0;
             }
@@ -119,7 +124,6 @@ void PostFile(std::string filename, brpc::StreamId stream) {
         LOG(INFO) << "上传文件失败，未能找到文件[" << filename << "]";
         return;
     }
-
 
     fin.seekg(0, std::ios::end);
     int64_t filelength = fin.tellg();
@@ -188,12 +192,10 @@ void *SendCommandToServer(void *arg) {
     exec::Request request;
 
     request.set_message("123");
-    //google::protobuf::Closure* done = brpc::NewCallback(
-    //    &HandleResponse, cntl, );
     stub.Echo(cntl, &request, response, NULL);
     if (cntl->Failed()) {
         LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
-        return;
+        return NULL;
     }else {
         LOG(INFO) << "成功连接到:" << cntl->remote_side();
     }
@@ -362,6 +364,23 @@ bool ShowInfo(std::string serverlist[], size_t servernum, STRUCT_COMMAND command
     return true;
 }
 
+size_t GetServerlistFromArg(const char* iplist, size_t length, std::string serverlist[]){
+    size_t servernum = 0;
+    for(size_t i = 0; i < length; i++) {
+        if(iplist[i] == '\t' || iplist[i] == ' ' || iplist[i] == ',') {
+            if(serverlist[servernum] != "")
+                servernum ++;
+            continue;
+        }
+        serverlist[servernum] += iplist[i];
+    }
+
+    if (serverlist[servernum] != "") 
+        servernum ++;
+
+    return servernum;
+}
+
 int main(int argc, char* argv[]) {       
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
@@ -369,18 +388,33 @@ int main(int argc, char* argv[]) {
     std::string serverlist[FLAGS_default_buffer_size];
     STRUCT_COMMAND commandlist[FLAGS_default_buffer_size];
     size_t servernum, commandnum;
-    if(!(servernum = GetServerlistFromFile(FLAGS_server_config, serverlist))||!(commandnum = GetCommandlistFromFile(FLAGS_command_config, commandlist))) {
-        LOG(INFO) << "Failed To Get the CommandList or ServerList!";
-        return 0;
+    if(FLAGS_ip.length() && (FLAGS_cmd.length() || FLAGS_postfile.length() || FLAGS_getfile.length())) {
+        servernum = GetServerlistFromArg(FLAGS_ip.c_str(), FLAGS_ip.length(), serverlist);
+        if(FLAGS_cmd.length()){
+            commandlist[0].commandtype = EXEC_COMMAND;
+            commandlist[0].commandname = FLAGS_cmd;
+        }            
+        else if(FLAGS_postfile.length()){
+            commandlist[0].commandtype = EXEC_POSTFILE;
+            commandlist[0].commandname = FLAGS_postfile;
+        }
+        else if(FLAGS_getfile.length()){
+            commandlist[0].commandtype = EXEC_GETFILE;
+            commandlist[0].commandname = FLAGS_getfile;
+        }
+        commandnum = 1;
+    }else {
+        servernum = GetServerlistFromFile(FLAGS_ip_conf, serverlist);
+        commandnum = GetCommandlistFromFile(FLAGS_cmd_conf, commandlist);
     }
-    if(!ShowInfo(serverlist, servernum, commandlist, commandnum)) {
-        LOG(INFO) << "Failed To Check the CommandList or ServerList!";
+    if(!servernum||!commandnum||!ShowInfo(serverlist, servernum, commandlist, commandnum)) {
+        LOG(INFO) << "Failed To Get the CommandList or ServerList!";
         return 0;
     }
 
     CreateThread(serverlist, servernum, commandlist, commandnum);
 
-    while(true)
+    while(!brpc::IsAskedToQuit())
         sleep(5);
 
     LOG(INFO) << "EchoClient is going to quit";

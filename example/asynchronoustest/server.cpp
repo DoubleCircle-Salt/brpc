@@ -40,6 +40,10 @@ size_t PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_
             }
             return i + 1;
         }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
+            streamfilemap[id].file.close();
+            butil::IOBuf msg;
+            msg.append(FLAGS_command_type + "2" + local_side + ": 接收上传文件[" + streamfilemap[id].filename + "]时发生错误" );
+            CHECK_EQ(0, brpc::StreamWrite(id, msg));
             return 0;
         }
     }
