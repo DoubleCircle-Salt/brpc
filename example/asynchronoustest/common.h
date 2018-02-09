@@ -11,7 +11,7 @@ DEFINE_int32(stream_max_buf_size, -1, "");
 DEFINE_int32(default_buffer_size, 1024, "");
 DEFINE_string(file_name, "filename:", "");
 DEFINE_string(command_type, "commandtype:", "");
-DEFINE_string(idle_timeout_ms, 10000, "");
+DEFINE_int64(idle_timeout_ms, 10000, "");
 
 #define EXEC_COMMAND 1
 #define EXEC_POSTFILE 2

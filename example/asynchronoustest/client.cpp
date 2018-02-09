@@ -14,9 +14,9 @@ DEFINE_string(ip, "", "");
 DEFINE_string(cmd, "", "");
 DEFINE_string(postfile, "", "");
 DEFINE_string(getfile, "", "");
-
+typedef std::map<brpc::StreamId, std::string> StreamIpMap;
 StreamFileMap streamfilemap;
-
+StreamIpMap streamipmap;
 size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     if(!streamfilemap[id].file.is_open()) {
         std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
@@ -90,12 +90,12 @@ public:
         return 0;
     }
     virtual void on_idle_timeout(brpc::StreamId id) {
-        LOG(INFO) << "Stream=" << id << " has no data transmission for a while";
+        LOG(INFO) << streamipmap[id] <<": Stream=" << id << " has no data transmission for a while";
         brpc::StreamClose(id);
         streamfilemap[id].file.close();
     }
     virtual void on_closed(brpc::StreamId id) {
-        LOG(INFO) << "Stream=" << id << " is closed";
+        LOG(INFO) << streamipmap[id] <<": Stream=" << id << " is closed";
         brpc::StreamClose(id);
         streamfilemap[id].file.close();
     }
@@ -187,7 +187,7 @@ void *SendCommandToServer(void *arg) {
         LOG(ERROR) << "Fail to create stream";
         return NULL;
     }
-
+    streamipmap[stream] = servername; 
     exec::EchoService_Stub stub(&channel);
     exec::Response* response = new exec::Response();
     exec::Request request;
@@ -388,7 +388,7 @@ int main(int argc, char* argv[]) {
 
     std::string serverlist[FLAGS_default_buffer_size];
     STRUCT_COMMAND commandlist[FLAGS_default_buffer_size];
-    size_t servernum, commandnum;
+    size_t servernum = 0, commandnum = 0;
     if(FLAGS_ip.length()) {
         servernum = GetServerlistFromArg(FLAGS_ip.c_str(), FLAGS_ip.length(), serverlist);
     }
