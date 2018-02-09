@@ -169,7 +169,12 @@ void GetFile(std::string filename, brpc::StreamId stream) {
     CHECK_EQ(0, brpc::StreamWrite(stream, msg));
 }
 
-void SendCommandToServer(std::string serverlist[], size_t servernum, STRUCT_COMMAND commandlist[], size_t commandnum) {
+void *SendCommandToServer(void *arg) {
+
+    STRUCT_COMMANDLISTALL *commandlistall = (struct STRUCT_COMMANDLISTALL *)arg;
+    std::string servername = *((*commandlistall).servername);
+    size_t commandnum = (*commandlistall).commandnum;
+    STRUCT_COMMAND *commandlist = *((*commandlistall).commandlist);
 
     brpc::ChannelOptions options;
     options.protocol = FLAGS_protocol;
@@ -177,47 +182,65 @@ void SendCommandToServer(std::string serverlist[], size_t servernum, STRUCT_COMM
     options.timeout_ms = FLAGS_timeout_ms;
     options.max_retry = FLAGS_max_retry;
 
-    for (size_t i = 0; i < servernum; i++) {
-        brpc::Channel channel;
-        if (channel.Init(serverlist[i].c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
-            LOG(ERROR) << "Fail to initialize channel";
-            return;
-        }
+    brpc::Channel channel;
+    if (channel.Init(servername.c_str(), FLAGS_load_balancer.c_str(), &options) != 0) {
+        LOG(ERROR) << "Fail to initialize channel";
+        return NULL;
+    }
 
-        brpc::Controller* cntl = new brpc::Controller();        
-        brpc::StreamId stream;
-        brpc::StreamOptions stream_options;
-        static StreamReceiver _receiver;
-        stream_options.handler = &_receiver;
-        stream_options.max_buf_size = FLAGS_stream_max_buf_size;
-        if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
-            LOG(ERROR) << "Fail to create stream";
-            return;
-        }
+    brpc::Controller* cntl = new brpc::Controller();        
+    brpc::StreamId stream;
+    brpc::StreamOptions stream_options;
+    static StreamReceiver _receiver;
+    stream_options.handler = &_receiver;
+    stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+    if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
+        LOG(ERROR) << "Fail to create stream";
+        return NULL;
+    }
 
-        exec::EchoService_Stub stub(&channel);
-        exec::Response* response = new exec::Response();
-        exec::Request request;
+    exec::EchoService_Stub stub(&channel);
+    exec::Response* response = new exec::Response();
+    exec::Request request;
 
-        request.set_message("123");
-        google::protobuf::Closure* done = brpc::NewCallback(
-            &HandleResponse, cntl, response);
-        stub.Echo(cntl, &request, response, done);    
+    request.set_message("123");
+    google::protobuf::Closure* done = brpc::NewCallback(
+        &HandleResponse, cntl, response);
+    stub.Echo(cntl, &request, response, done);    
 
-        for (size_t j = 0; j < commandnum; j++) {
-            switch(commandlist[j].commandtype) {
-                case EXEC_COMMAND:
-                    ExecCommand(commandlist[j].commandname, stream);
-                    break;
-                case EXEC_POSTFILE:
-                    PostFile(commandlist[j].commandname, stream);
-                    break;
-                case EXEC_GETFILE:
-                    GetFile(commandlist[j].commandname, stream);
-                    break;
-            }
+    for (size_t i = 0; i < commandnum; i++) {
+        switch(commandlist[i].commandtype) {
+            case EXEC_COMMAND:
+                ExecCommand(commandlist[i].commandname, stream);
+                break;
+            case EXEC_POSTFILE:
+                PostFile(commandlist[i].commandname, stream);
+                break;
+            case EXEC_GETFILE:
+                GetFile(commandlist[i].commandname, stream);
+                break;
         }
     }
+    return NULL;
+}
+
+void CreateThread(std::string serverlist[], size_t servernum, STRUCT_COMMAND *commandlist, size_t commandnum) {
+
+    std::vector<bthread_t> tids;
+    tids.resize(servernum);
+
+    for (size_t i = 0; i < servernum; i++) {
+        STRUCT_COMMANDLISTALL *commandlistall = (STRUCT_COMMANDLISTALL *)malloc(sizeof(STRUCT_COMMANDLISTALL));
+        commandlistall->commandlist = &commandlist;
+        commandlistall->commandnum = commandnum;
+        commandlistall->servername = &serverlist[i];
+        if(bthread_start_background(&tids[i], NULL, SendCommandToServer, (void *)commandlistall) != 0) {
+            LOG(ERROR) << "Fail to create bthread";
+            return;
+        }        
+    }
+    for(size_t i = 0; i < servernum; i++)
+        bthread_join(tids[i], NULL);
 }
 
 size_t GetServerlistFromFile(std::string filename, std::string serverlist[]) {
@@ -365,7 +388,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    SendCommandToServer(serverlist, servernum, commandlist, commandnum);
+    CreateThread(serverlist, servernum, commandlist, commandnum);
 
     while(true)
         sleep(5);

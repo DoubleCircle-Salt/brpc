@@ -29,6 +29,12 @@ typedef struct _STRUCT_COMMAND{
     std::string commandname;
 }STRUCT_COMMAND;
 
+struct STRUCT_COMMANDLISTALL{
+    STRUCT_COMMAND **commandlist;
+    std::string *servername;
+    size_t commandnum;
+};
+
 typedef std::map<brpc::StreamId, STRUCT_STREAM> StreamFileMap;
 
 bool exec_cmd(const char *command, std::string *final_msg)
@@ -98,7 +104,7 @@ bool exec_cmd(const char *command, std::string *final_msg)
     }
 }
 
-int64_t atoi_64t(char numchar[]) {
+int64_t atoi_64t(const char numchar[]) {
     int64_t num = 0;
     for(size_t i = 0; i < strlen(numchar); i++)
         num = num * 10 + numchar[i] - 48;
