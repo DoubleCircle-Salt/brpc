@@ -148,8 +148,8 @@ void PostFile(std::string filename, brpc::StreamId stream) {
         char buffer[FLAGS_default_buffer_size + 1] = {'\0'};
         int32_t length = fin.read(buffer, FLAGS_default_buffer_size).gcount();
         msg.append(buffer, length);
-        if(brpc::StreamWrite(id, msg)) {
-            LOG(INFO) << streamipmap[id] << ": 上传文件失败，与服务端连接断开";
+        if(brpc::StreamWrite(stream, msg)) {
+            LOG(INFO) << streamipmap[stream] << ": 上传文件失败，与服务端连接断开";
             break;
         }
     }
