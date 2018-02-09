@@ -97,22 +97,6 @@ public:
 private:
 };
 
-void HandleResponse(
-        brpc::Controller* cntl,
-        exec::Response* response) {
-
-    std::unique_ptr<brpc::Controller> cntl_guard(cntl);
-    std::unique_ptr<exec::Response> response_guard(response);
-
-    if (cntl->Failed()) {
-        LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
-        return;
-    }
-
-    LOG(INFO) << "成功连接到:" << cntl->remote_side();
-}
-
-
 void ExecCommand(std::string command, brpc::StreamId stream) {
     butil::IOBuf msg;
     msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command);
@@ -204,9 +188,15 @@ void *SendCommandToServer(void *arg) {
     exec::Request request;
 
     request.set_message("123");
-    google::protobuf::Closure* done = brpc::NewCallback(
-        &HandleResponse, cntl, response);
-    stub.Echo(cntl, &request, response, done);    
+    //google::protobuf::Closure* done = brpc::NewCallback(
+    //    &HandleResponse, cntl, );
+    stub.Echo(cntl, &request, response, NULL);
+    if (cntl->Failed()) {
+        LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
+        return;
+    }else {
+        LOG(INFO) << "成功连接到:" << cntl->remote_side();
+    }
 
     for (size_t i = 0; i < commandnum; i++) {
         switch(commandlist[i].commandtype) {
@@ -237,7 +227,7 @@ void CreateThread(std::string serverlist[], size_t servernum, STRUCT_COMMAND *co
         if(bthread_start_background(&tids[i], NULL, SendCommandToServer, (void *)commandlistall) != 0) {
             LOG(ERROR) << "Fail to create bthread";
             return;
-        }        
+        } 
     }
     for(size_t i = 0; i < servernum; i++)
         bthread_join(tids[i], NULL);
