@@ -202,6 +202,7 @@ public:
         local_side = butil::endpoint2str(cntl->local_side()).c_str();
 
         brpc::StreamOptions stream_options;
+        stream_options.idle_timeout_ms = FLAGS_idle_timeout_ms;
         stream_options.max_buf_size = FLAGS_stream_max_buf_size;
         stream_options.handler = &_receiver;
         if (brpc::StreamAccept(&_sd, *cntl, &stream_options) != 0) {

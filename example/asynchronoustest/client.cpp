@@ -182,6 +182,7 @@ void *SendCommandToServer(void *arg) {
     static StreamReceiver _receiver;
     stream_options.handler = &_receiver;
     stream_options.max_buf_size = FLAGS_stream_max_buf_size;
+    stream_options.idle_timeout_ms = FLAGS_idle_timeout_ms;
     if (brpc::StreamCreate(&stream, *cntl, &stream_options) != 0) {
         LOG(ERROR) << "Fail to create stream";
         return NULL;
