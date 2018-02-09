@@ -388,8 +388,10 @@ int main(int argc, char* argv[]) {
     std::string serverlist[FLAGS_default_buffer_size];
     STRUCT_COMMAND commandlist[FLAGS_default_buffer_size];
     size_t servernum, commandnum;
-    if(FLAGS_ip.length() && (FLAGS_cmd.length() || FLAGS_postfile.length() || FLAGS_getfile.length())) {
+    if(FLAGS_ip.length()) {
         servernum = GetServerlistFromArg(FLAGS_ip.c_str(), FLAGS_ip.length(), serverlist);
+    }
+    if(FLAGS_cmd.length() || FLAGS_postfile.length() || FLAGS_getfile.length()) {
         if(FLAGS_cmd.length()){
             commandlist[0].commandtype = EXEC_COMMAND;
             commandlist[0].commandname = FLAGS_cmd;
@@ -403,10 +405,12 @@ int main(int argc, char* argv[]) {
             commandlist[0].commandname = FLAGS_getfile;
         }
         commandnum = 1;
-    }else {
-        servernum = GetServerlistFromFile(FLAGS_ip_conf, serverlist);
-        commandnum = GetCommandlistFromFile(FLAGS_cmd_conf, commandlist);
     }
+    if(!servernum)
+        servernum = GetServerlistFromFile(FLAGS_ip_conf, serverlist);
+    if(!commandnum)
+        commandnum = GetCommandlistFromFile(FLAGS_cmd_conf, commandlist);
+
     if(!servernum||!commandnum||!ShowInfo(serverlist, servernum, commandlist, commandnum)) {
         LOG(INFO) << "Failed To Get the CommandList or ServerList!";
         return 0;
