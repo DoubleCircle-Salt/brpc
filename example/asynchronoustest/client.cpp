@@ -25,22 +25,19 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
             streamfilemap[id].commandtype = atoi(streamstring.substr(0, 1).c_str());                
             streamstring = streamstring.substr(1);
             if (streamfilemap[id].commandtype == EXEC_POSTFILE||streamfilemap[id].commandtype == EXEC_COMMAND) {
-                LOG(INFO) << streamstring;
+                LOG(INFO) << streamipmap[id] << ": " <<streamstring;
             }else if (streamfilemap[id].commandtype == EXEC_GETFILE) {
                 std::string::size_type nPosSize = streamstring.find(" ");
                 if(nPosSize != std::string::npos) {
                     streamfilemap[id].filename = streamstring.substr(0, nPosSize);
                     streamfilemap[id].filelength = atoi_64t(streamstring.substr(nPosSize + 1).c_str());
                     streamfilemap[id].length = 0;
-                    
-                    std::string::size_type nPosDir = streamfilemap[id].filename.find("/");
-                    if(nPosDir != std::string::npos) {
-                        std::string cmd = "mkdir " + streamfilemap[id].filename.substr(0, nPosDir);
-                        std::string fmsg;
-                        exec_cmd(cmd.c_str(), &fmsg);
-                    }else {
-                        return 0;
-                    }
+
+                    std::string cmd = "mkdir " + streamipmap[id];
+                    std::string fmsg;
+                    exec_cmd(cmd.c_str(), &fmsg);                    
+                    streamfilemap[id].filename = streamipmap[id] + "/" + streamfilemap[id].filename;
+
                     streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::out);
                     if(streamfilemap[id].filelength == 0) {
                         LOG(INFO) << streamfilemap[id].filename << ": 成功下载文件，文件长度验证正确";
@@ -198,7 +195,7 @@ void *SendCommandToServer(void *arg) {
         LOG(WARNING) << "Fail to send EchoRequest, " << cntl->ErrorText();
         return NULL;
     }else {
-        LOG(INFO) << "成功连接到:" << cntl->remote_side();
+        LOG(INFO) << "成功连接到: " << cntl->remote_side();
     }
 
     for (size_t i = 0; i < commandnum; i++) {

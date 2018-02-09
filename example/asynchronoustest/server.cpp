@@ -7,7 +7,6 @@ DEFINE_int32(idle_timeout_s, -1, "Connection will be closed if there is no "
 DEFINE_int32(logoff_ms, 2000, "Maximum duration of server's LOGOFF state "
              "(waiting for client to close connection before server stops)");
 
-std::string local_side;
 StreamFileMap streamfilemap;
 
 void ExecCommandByStream(brpc::StreamId id) {
@@ -18,7 +17,7 @@ void ExecCommandByStream(brpc::StreamId id) {
         final_msg = "命令[" + streamfilemap[id].filename + "]执行失败 " + final_msg;
     }
     butil::IOBuf msg;
-    msg.append(FLAGS_command_type + "1" + local_side + ": " + final_msg);
+    msg.append(FLAGS_command_type + "1" + final_msg);
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
 }
 
@@ -35,14 +34,14 @@ size_t PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_
             std::string::size_type nPosB = final_msg.find(" "); 
             if (nPosB != std::string::npos) {
                 butil::IOBuf msg;
-                msg.append(FLAGS_command_type + "2" + local_side + ": 成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：" + final_msg.substr(0, nPosB));
+                msg.append(FLAGS_command_type + "2" + "成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：" + final_msg.substr(0, nPosB));
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
             }
             return i + 1;
         }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
             streamfilemap[id].file.close();
             butil::IOBuf msg;
-            msg.append(FLAGS_command_type + "2" + local_side + ": 接收上传文件[" + streamfilemap[id].filename + "]时发生错误" );
+            msg.append(FLAGS_command_type + "2" + "接收上传文件[" + streamfilemap[id].filename + "]时发生错误" );
             CHECK_EQ(0, brpc::StreamWrite(id, msg));
             return 0;
         }
@@ -59,7 +58,7 @@ void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t s
     filelengthstream << filelength;
 
     butil::IOBuf msg;
-    msg.append(FLAGS_command_type + "3" + local_side + "/" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
+    msg.append(FLAGS_command_type + "3" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
 
     if(filelength == 0) {
@@ -125,7 +124,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
             if(streamfilemap[id].filelength == 0) {
                 streamfilemap[id].file.close();
                 butil::IOBuf msg;
-                msg.append(FLAGS_command_type + "2" + local_side + ": 成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：0");
+                msg.append(FLAGS_command_type + "2" + "成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：0");
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
                 return i;
             }
@@ -134,7 +133,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
             streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
             if(!streamfilemap[id].file) {
                 butil::IOBuf msg;
-                msg.append(FLAGS_command_type + "1" + local_side + ": 下载文件失败，未能找到文件");
+                msg.append(FLAGS_command_type + "1" + "下载文件失败，未能找到文件");
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
                 return i;
             }
@@ -199,7 +198,6 @@ public:
 
         brpc::Controller* cntl =
             static_cast<brpc::Controller*>(cntl_base);
-        local_side = butil::endpoint2str(cntl->local_side()).c_str();
 
         brpc::StreamOptions stream_options;
         stream_options.idle_timeout_ms = FLAGS_idle_timeout_ms;
