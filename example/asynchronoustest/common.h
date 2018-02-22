@@ -6,15 +6,12 @@
 #include <fstream>
 #include <sstream>
 
+DEFINE_bool(send_attachment, true, "Carry attachment along with response");
 DEFINE_int32(stream_max_buf_size, -1, "");
 DEFINE_int32(default_buffer_size, 1024, "");
+DEFINE_string(file_name, "filename:", "");
+DEFINE_string(command_type, "commandtype:", "");
 DEFINE_int64(idle_timeout_ms, -1, "");
-
-#define _FILE_NAME "filename:"
-#define _FILE_NAME_LEN 9
-#define _COMMAND_TYPE "commandtype:"
-#define _COMMAND_TYPE_LEN 12
-
 
 #define EXEC_COMMAND 1
 #define EXEC_POSTFILE 2

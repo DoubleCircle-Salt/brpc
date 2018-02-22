@@ -17,7 +17,7 @@ void ExecCommandByStream(brpc::StreamId id) {
         final_msg = "命令[" + streamfilemap[id].filename + "]执行失败 " + final_msg;
     }
     butil::IOBuf msg;
-    msg.append(_COMMAND_TYPE + "1" + final_msg);
+    msg.append(FLAGS_command_type + "1" + final_msg);
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
 }
 
@@ -34,14 +34,14 @@ size_t PostFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_
             std::string::size_type nPosB = final_msg.find(" "); 
             if (nPosB != std::string::npos) {
                 butil::IOBuf msg;
-                msg.append(_COMMAND_TYPE + "2" + "成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：" + final_msg.substr(0, nPosB));
+                msg.append(FLAGS_command_type + "2" + "成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：" + final_msg.substr(0, nPosB));
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
             }
             return i + 1;
         }else if(streamfilemap[id].length > streamfilemap[id].filelength) {
             streamfilemap[id].file.close();
             butil::IOBuf msg;
-            msg.append(_COMMAND_TYPE + "2" + "接收上传文件[" + streamfilemap[id].filename + "]时发生错误" );
+            msg.append(FLAGS_command_type + "2" + "接收上传文件[" + streamfilemap[id].filename + "]时发生错误" );
             CHECK_EQ(0, brpc::StreamWrite(id, msg));
             return 0;
         }
@@ -58,7 +58,7 @@ void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t s
     filelengthstream << filelength;
 
     butil::IOBuf msg;
-    msg.append(_COMMAND_TYPE + "3" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
+    msg.append(FLAGS_command_type + "3" + GetRealname(streamfilemap[id].filename) + " " + filelengthstream.str());
     CHECK_EQ(0, brpc::StreamWrite(id, msg));
 
     if(filelength == 0) {
@@ -80,15 +80,15 @@ void GetFileByStream(brpc::StreamId id, butil::IOBuf *const messages[], size_t s
 size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     if(!streamfilemap[id].file.is_open()) {
         //获取命令类型
-        std::string::size_type nPosType = (*messages[i]).to_string().find(_COMMAND_TYPE);
+        std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
         if (nPosType != std::string::npos){
-            std::string streamstring = (*messages[i++]).to_string().substr(nPosType + _COMMAND_TYPE_LEN);
+            std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
             //获取命令内容
-            std::string::size_type nPosName = streamstring.find(_FILE_NAME);
+            std::string::size_type nPosName = streamstring.find(FLAGS_file_name);
 
             if(nPosName != std::string::npos) {
                 streamfilemap[id].commandtype = atoi(streamstring.substr(0, nPosName).c_str());
-                streamstring = streamstring.substr(nPosName + _FILE_NAME_LEN);
+                streamstring = streamstring.substr(nPosName + FLAGS_file_name.length());
                 //下载文件与执行命令不包含文件长度
                 if(streamfilemap[id].commandtype == EXEC_GETFILE||streamfilemap[id].commandtype == EXEC_COMMAND){
                     streamfilemap[id].filename = streamstring;
@@ -126,7 +126,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
             if(streamfilemap[id].filelength == 0) {
                 streamfilemap[id].file.close();
                 butil::IOBuf msg;
-                msg.append(_COMMAND_TYPE + "2" + "成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：0");
+                msg.append(FLAGS_command_type + "2" + "成功上传文件[" + streamfilemap[id].filename + "]，返回文件长度：0");
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
                 return i;
             }
@@ -135,7 +135,7 @@ size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_
             streamfilemap[id].file.open(streamfilemap[id].filename, std::ios::in);
             if(!streamfilemap[id].file) {
                 butil::IOBuf msg;
-                msg.append(_COMMAND_TYPE + "1" + "下载文件失败，未能找到文件");
+                msg.append(FLAGS_command_type + "1" + "下载文件失败，未能找到文件");
                 CHECK_EQ(0, brpc::StreamWrite(id, msg));
                 return i;
             }

@@ -19,9 +19,9 @@ StreamFileMap streamfilemap;
 StreamIpMap streamipmap;
 size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     if(!streamfilemap[id].file.is_open()) {
-        std::string::size_type nPosType = (*messages[i]).to_string().find(_COMMAND_TYPE);
+        std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
         if (nPosType != std::string::npos){
-            std::string streamstring = (*messages[i++]).to_string().substr(nPosType + _COMMAND_TYPE_LEN);
+            std::string streamstring = (*messages[i++]).to_string().substr(nPosType + FLAGS_command_type.length());
             streamfilemap[id].commandtype = atoi(streamstring.substr(0, 1).c_str());                
             streamstring = streamstring.substr(1);
             if (streamfilemap[id].commandtype == EXEC_POSTFILE||streamfilemap[id].commandtype == EXEC_COMMAND) {
@@ -101,7 +101,7 @@ private:
 
 void ExecCommand(std::string command, brpc::StreamId stream) {
     butil::IOBuf msg;
-    msg.append(_COMMAND_TYPE + "1" + _FILE_NAME + command);
+    msg.append(FLAGS_command_type + "1" + FLAGS_file_name + command);
     if(brpc::StreamWrite(stream, msg)){
         LOG(INFO) << streamipmap[stream] << ": 发送指令失败，与服务端连接断开";
     }
@@ -132,7 +132,7 @@ void PostFile(std::string filename, brpc::StreamId stream) {
     filelengthstream << filelength;
 
     butil::IOBuf msg;
-    msg.append(_COMMAND_TYPE + "2" + _FILE_NAME + filepath + GetRealname(filename) + " " + filelengthstream.str());
+    msg.append(FLAGS_command_type + "2" + FLAGS_file_name + filepath + GetRealname(filename) + " " + filelengthstream.str());
     if(brpc::StreamWrite(stream, msg)){
         LOG(INFO) << streamipmap[stream] << ": 上传文件失败，与服务端连接断开";
         fin.close();
@@ -159,7 +159,7 @@ void PostFile(std::string filename, brpc::StreamId stream) {
 void GetFile(std::string filename, brpc::StreamId stream) {     
 
     butil::IOBuf msg;
-    msg.append(_COMMAND_TYPE + "3" + _FILE_NAME + filename);
+    msg.append(FLAGS_command_type + "3" + FLAGS_file_name + filename);
     if(brpc::StreamWrite(stream, msg)){
         LOG(INFO) << streamipmap[stream] << ": 发送指令失败，与服务端连接断开";
     }
