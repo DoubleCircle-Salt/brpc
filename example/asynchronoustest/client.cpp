@@ -8,7 +8,7 @@ DEFINE_string(server, "0.0.0.0:8003", "IP Address of server");
 DEFINE_string(load_balancer, "", "The algorithm for load balancing");
 DEFINE_int32(timeout_ms, 10000, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
-DEFINE_string(ip_conf, "server.conf", "");
+DEFINE_string(ip_conf, "ip.conf", "");
 DEFINE_string(cmd_conf, "command.conf", "");
 DEFINE_string(port_conf, "port.conf", "");
 DEFINE_string(ip, "", "");
@@ -430,7 +430,35 @@ void GetServerPort(){
     fin.close();
 }
 
-int main(int argc, char* argv[]) {       
+void print_version(){
+    std::cout << "brpc_command_order_tool version 1.0" << std::endl;
+}
+
+void print_help()
+{
+    std::cout << "  -v/-V/--version\tshow version number" << std::endl;
+    std::cout << "  -h/--help      \tprint this help" << std::endl;
+    std::cout << "  --port         \tport of client port                                              \tdefaults[8003]" << std::endl;
+    std::cout << "  --ip           \tiplist to request, divide with ',' or '\\t' or space             \tdefaults[none]" << std::endl;
+    std::cout << "  --cmd          \tcommand to execute                                               \tdefaults[none]" << std::endl;
+    std::cout << "  --postfile     \tfile path to post to server                                      \tdefaults[none]" << std::endl;
+    std::cout << "  --getfile      \tfile path to download from server                                \tdefaults[none]" << std::endl;
+    std::cout << "  --port_conf    \tport config file of client port                                  \tdefaults[port.conf]" << std::endl;
+    std::cout << "  --ip_conf      \tip config file to request                                        \tdefaults[ip.conf]" << std::endl;
+    std::cout << "  --cmd_conf     \tcommand config file, include 3 types of command(CMD, POST or GET)\tdefaults[command.conf]" << std::endl;
+}
+
+int main(int argc, char* argv[]) {
+
+    if(argc >= 2){
+        if(strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "-V") == 0 || strcmp(argv[1], "--version") == 0) {
+            print_version();
+            return 0;
+        }else if(strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+            print_help();
+            return 0;
+        }
+    }
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
 
