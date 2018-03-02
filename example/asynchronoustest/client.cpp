@@ -10,13 +10,16 @@ DEFINE_int32(timeout_ms, 10000, "RPC timeout in milliseconds");
 DEFINE_int32(max_retry, 3, "Max retries(not including the first RPC)");
 DEFINE_string(ip_conf, "server.conf", "");
 DEFINE_string(cmd_conf, "command.conf", "");
+DEFINE_string(port_conf, "port.conf", "");
 DEFINE_string(ip, "", "");
 DEFINE_string(cmd, "", "");
 DEFINE_string(postfile, "", "");
 DEFINE_string(getfile, "", "");
+DEFINE_string(port, "8003", "TCP Port of this client");
 typedef std::map<brpc::StreamId, std::string> StreamIpMap;
 StreamFileMap streamfilemap;
 StreamIpMap streamipmap;
+std::string server_port;
 size_t JudgeCommandType(brpc::StreamId id, butil::IOBuf *const messages[], size_t size, size_t i) {
     if(!streamfilemap[id].file.is_open()) {
         std::string::size_type nPosType = (*messages[i]).to_string().find(FLAGS_command_type);
@@ -278,6 +281,13 @@ size_t GetServerlistFromFile(std::string filename, std::string serverlist[]) {
     if (serverlist[servernum] != "") 
         servernum ++;
 
+    for(size_t i = 0; i < servernum; i++) {
+        std::string::size_type nPosC = serverlist[i].find(":");
+        if(nPosC == std::string::npos) {
+            serverlist[i] += ":" + server_port;
+        }
+    }
+
     return servernum;    
 }
 
@@ -388,13 +398,43 @@ size_t GetServerlistFromArg(const char* iplist, size_t length, std::string serve
     if (serverlist[servernum] != "") 
         servernum ++;
 
+    for(size_t i = 0; i < servernum; i++) {
+        std::string::size_type nPosC = serverlist[i].find(":");
+        if(nPosC == std::string::npos) {
+            serverlist[i] += ":" + server_port;
+        }
+    }
+
     return servernum;
+}
+
+void GetServerPort(){
+    std::ifstream fin(FLAGS_port_conf);
+    if (!fin) {
+        server_port = FLAGS_port;
+    }
+    char buffer[7] = {'\0'};
+    int32_t length = fin.read(buffer, 6).gcount();
+    if(length > 0) {
+        server_port = "";
+        for(int32_t i = 0; i < length; i++){
+            if(buffer[i] == '\n' || buffer[i] == '\t' || buffer[i] == ' ')
+                continue;
+            server_port += buffer[i];
+        }
+    }
+    else {
+        server_port = FLAGS_port;
+    }
+
+    fin.close();
 }
 
 int main(int argc, char* argv[]) {       
 
     GFLAGS_NS::ParseCommandLineFlags(&argc, &argv, true);
 
+    GetServerPort();
     std::string serverlist[FLAGS_default_buffer_size];
     STRUCT_COMMAND commandlist[FLAGS_default_buffer_size];
     size_t servernum = 0, commandnum = 0;
